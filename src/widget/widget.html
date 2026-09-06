@@ -6,30 +6,34 @@
   <title>Antigravity 桌面即時浮窗</title>
   <style>
     :root {
-      --bg: rgba(255, 255, 255, 0.82);
+      --bg: rgba(255, 255, 255, 0.84);
+      --bg-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(246, 248, 252, 0.95) 100%);
       --border: rgba(0, 0, 0, 0.08);
-      --text-main: #18181b;
-      --text-muted: #71717a;
-      --card-bg: rgba(0, 0, 0, 0.03);
-      --card-border: rgba(0, 0, 0, 0.05);
-      --hover-bg: rgba(0, 0, 0, 0.06);
+      --border-subtle: rgba(0, 0, 0, 0.05);
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --card-bg: rgba(255, 255, 255, 0.7);
+      --card-border: rgba(0, 0, 0, 0.06);
+      --hover-bg: rgba(0, 0, 0, 0.05);
       --accent-blue: #0284c7;
       --accent-green: #10b981;
       --accent-amber: #f59e0b;
       --accent-red: #ef4444;
-      --shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.12), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+      --shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.14), 0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: rgba(24, 24, 27, 0.85);
+        --bg: rgba(24, 24, 30, 0.85);
+        --bg-gradient: linear-gradient(135deg, rgba(28, 28, 36, 0.92) 0%, rgba(18, 18, 24, 0.96) 100%);
         --border: rgba(255, 255, 255, 0.12);
-        --text-main: #f4f4f5;
-        --text-muted: #a1a1aa;
-        --card-bg: rgba(255, 255, 255, 0.04);
-        --card-border: rgba(255, 255, 255, 0.07);
-        --hover-bg: rgba(255, 255, 255, 0.08);
-        --shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+        --border-subtle: rgba(255, 255, 255, 0.06);
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --card-bg: rgba(255, 255, 255, 0.05);
+        --card-border: rgba(255, 255, 255, 0.08);
+        --hover-bg: rgba(255, 255, 255, 0.07);
+        --shadow: 0 20px 45px -4px rgba(0, 0, 0, 0.5), 0 4px 14px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.08);
       }
     }
 
@@ -56,88 +60,127 @@
 
     .widget-container {
       flex: 1;
-      background: var(--bg);
-      backdrop-filter: blur(24px) saturate(180%);
-      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      background: var(--bg-gradient);
+      backdrop-filter: blur(28px) saturate(190%);
+      -webkit-backdrop-filter: blur(28px) saturate(190%);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 16px;
       box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Header & Drag Area */
+    /* Header */
     .header {
-      height: 38px;
+      height: 36px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 10px;
       -webkit-app-region: drag;
       cursor: grab;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--border-subtle);
     }
 
     .header:active {
       cursor: grabbing;
     }
 
-    .status-badge {
-      display: flex;
+    .status-capsule {
+      display: inline-flex;
       align-items: center;
-      gap: 7px;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 20px;
       font-weight: 600;
-      font-size: 11.5px;
+      font-size: 11px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      max-width: 210px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 200px;
+      transition: all 0.2s ease;
     }
 
     .pulse-dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background-color: var(--accent-blue);
-      position: relative;
+      background-color: var(--text-muted);
       flex-shrink: 0;
+      transition: all 0.2s ease;
     }
 
-    .pulse-dot.idle { background-color: var(--text-muted); }
-    .pulse-dot.thinking {
+    .status-capsule.idle .pulse-dot {
+      background-color: var(--text-muted);
+    }
+
+    .status-capsule.thinking {
+      background: rgba(2, 132, 199, 0.1);
+      border-color: rgba(2, 132, 199, 0.25);
+      color: var(--accent-blue);
+    }
+    .status-capsule.thinking .pulse-dot {
       background-color: var(--accent-blue);
       box-shadow: 0 0 8px var(--accent-blue);
-      animation: pulse 1.5s infinite;
+      animation: pulse 1.5s infinite ease-in-out;
     }
-    .pulse-dot.running {
+
+    .status-capsule.running {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.25);
+      color: var(--accent-green);
+    }
+    .status-capsule.running .pulse-dot {
       background-color: var(--accent-green);
       box-shadow: 0 0 8px var(--accent-green);
-      animation: pulse 1.2s infinite;
+      animation: pulse 1.2s infinite ease-in-out;
     }
-    .pulse-dot.ask {
+
+    .status-capsule.ask {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.35);
+      color: #d97706;
+    }
+    .status-capsule.ask .pulse-dot {
       background-color: var(--accent-amber);
       box-shadow: 0 0 10px var(--accent-amber);
-      animation: pulse 0.8s infinite;
+      animation: pulse 0.8s infinite ease-in-out;
     }
 
     @keyframes pulse {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.3); opacity: 1; }
-      100% { transform: scale(0.95); opacity: 0.8; }
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.35); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    .drag-handle {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      opacity: 0.35;
+      padding: 0 4px;
+    }
+    .drag-dot {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: currentColor;
     }
 
     .controls {
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 2px;
       -webkit-app-region: no-drag;
     }
 
     .btn-icon {
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -155,102 +198,98 @@
     }
 
     .btn-icon svg {
-      width: 14px;
-      height: 14px;
+      width: 13px;
+      height: 13px;
       stroke-width: 2;
     }
 
     /* Content Area */
     .content {
-      padding: 10px;
+      padding: 8px 10px 10px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      overflow-y: auto;
       flex: 1;
+      overflow: hidden;
     }
 
-    /* Summary Metrics Cards */
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-
-    .metric-card {
+    /* Unified Glass Stats Ribbon */
+    .stats-ribbon {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 6px 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease;
-    }
-
-    .metric-card:hover {
-      background: var(--hover-bg);
-      border-color: var(--border);
-    }
-
-    .metric-header {
+      border-radius: 10px;
       display: flex;
       align-items: center;
-      gap: 4px;
-      color: var(--text-muted);
-      font-size: 10.5px;
+      justify-content: space-around;
+      padding: 6px 4px;
     }
 
-    .metric-header svg {
-      width: 12px;
-      height: 12px;
+    .stat-pill {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      font-size: 11px;
+    }
+
+    .stat-pill svg {
+      width: 13px;
+      height: 13px;
       stroke-width: 2;
+      color: var(--text-muted);
+      flex-shrink: 0;
     }
 
-    .metric-value {
-      font-size: 13px;
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .stat-val {
       font-weight: 700;
+      font-size: 12px;
       color: var(--text-main);
     }
 
-    .metric-diff {
+    .stat-badge {
       font-size: 10px;
       font-weight: 600;
-      margin-left: 2px;
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-green);
     }
-    .diff-add { color: var(--accent-green); }
-    .diff-del { color: var(--accent-red); }
+
+    .stat-divider {
+      width: 1px;
+      height: 16px;
+      background: var(--border-subtle);
+    }
 
     /* Ask Question Alert Banner */
     .ask-card {
-      background: color-mix(in srgb, var(--accent-amber) 10%, var(--bg));
-      border: 1px solid var(--accent-amber);
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.35);
       border-radius: 10px;
       padding: 8px 10px;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      animation: glow 2s infinite ease-in-out;
-    }
-
-    @keyframes glow {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2); }
-      50% { box-shadow: 0 0 10px 2px rgba(245, 158, 11, 0.35); }
     }
 
     .ask-header {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: var(--accent-amber);
+      color: #d97706;
       font-weight: 600;
       font-size: 11px;
     }
 
     .ask-header svg {
-      width: 14px;
-      height: 14px;
+      width: 13px;
+      height: 13px;
       stroke-width: 2;
     }
 
@@ -270,7 +309,7 @@
 
     .ask-btn {
       background: var(--bg);
-      border: 1px solid var(--card-border);
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 5px 8px;
       font-size: 11px;
@@ -289,37 +328,32 @@
       color: #fff;
     }
 
-    .ask-btn svg {
-      width: 12px;
-      height: 12px;
-      flex-shrink: 0;
-    }
-
     /* Activity Stream List */
     .activity-section {
       display: flex;
       flex-direction: column;
       gap: 4px;
-      margin-top: 2px;
+      flex: 1;
+      min-height: 0;
     }
 
     .section-title {
       font-size: 10.5px;
       color: var(--text-muted);
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      padding: 0 2px;
     }
 
     .activity-list {
       display: flex;
       flex-direction: column;
       gap: 3px;
-      max-height: 110px;
       overflow-y: auto;
+      flex: 1;
+      padding-right: 2px;
     }
 
     .activity-item {
@@ -329,66 +363,82 @@
       padding: 4px 6px;
       border-radius: 6px;
       background: var(--card-bg);
+      border: 1px solid var(--card-border);
       font-size: 11px;
       color: var(--text-main);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      transition: background 0.12s ease;
     }
 
-    .activity-item svg {
-      width: 12px;
-      height: 12px;
-      color: var(--text-muted);
-      flex-shrink: 0;
+    .activity-item:hover {
+      background: var(--hover-bg);
     }
 
     .badge-tag {
       font-size: 9px;
       font-weight: 700;
-      padding: 1px 4px;
+      padding: 1px 5px;
       border-radius: 4px;
       letter-spacing: 0.2px;
       flex-shrink: 0;
     }
 
-    .badge-read { background: rgba(2, 132, 199, 0.15); color: var(--accent-blue); }
-    .badge-edit { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); }
-    .badge-cmd { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+    .badge-read { background: rgba(14, 165, 233, 0.12); color: var(--accent-blue); }
+    .badge-edit { background: rgba(16, 185, 129, 0.12); color: var(--accent-green); }
+    .badge-cmd { background: rgba(99, 102, 241, 0.12); color: #6366f1; }
 
     .activity-text {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       flex: 1;
+      font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
+      font-size: 10.5px;
+    }
+
+    .metric-diff {
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 2px;
+      color: var(--accent-green);
     }
 
     /* Collapsed View (Mini Capsule) */
     .widget-container.collapsed {
-      height: 38px;
+      height: 36px;
     }
     .widget-container.collapsed .content {
       display: none;
     }
     .widget-container.collapsed .header {
       border-bottom: none;
+      height: 36px;
     }
 
     /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.25); border-radius: 4px; }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.2); border-radius: 3px; }
   </style>
 </head>
 <body>
   <div class="widget-container" id="container">
     <!-- Header -->
     <div class="header">
-      <div class="status-badge" id="statusBadge">
-        <span class="pulse-dot idle" id="pulseDot"></span>
+      <div class="status-capsule idle" id="statusCapsule">
+        <span class="pulse-dot" id="pulseDot"></span>
         <span id="statusText">待命中</span>
       </div>
+
+      <div class="drag-handle">
+        <span class="drag-dot"></span>
+        <span class="drag-dot"></span>
+        <span class="drag-dot"></span>
+      </div>
+
       <div class="controls">
-        <button class="btn-icon" id="btnFocus" title="切換至 Antigravity 主視窗">
+        <button class="btn-icon" id="btnFocus" title="聚焦主視窗">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
             <polyline points="15 3 21 3 21 9"></polyline>
@@ -400,7 +450,7 @@
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </button>
-        <button class="btn-icon" id="btnClose" title="隱藏浮窗 (Ctrl+Shift+W 重新呼出)">
+        <button class="btn-icon" id="btnClose" title="隱藏浮窗 (Ctrl+Shift+W 喚醒)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -411,45 +461,41 @@
 
     <!-- Content -->
     <div class="content" id="contentArea">
-      <!-- Summary Metrics -->
-      <div class="summary-grid">
+      <!-- Unified Glass Stats Ribbon -->
+      <div class="stats-ribbon">
         <!-- Read Files -->
-        <div class="metric-card" id="cardRead">
-          <div class="metric-header">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            <span>讀取檔案</span>
-          </div>
-          <div class="metric-value" id="countRead">0 檔</div>
+        <div class="stat-pill" title="已探索 / 讀取檔案">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span class="stat-label">探索</span>
+          <span class="stat-val" id="countRead">0</span>
         </div>
 
-        <!-- Edited Files -->
-        <div class="metric-card" id="cardEdit">
-          <div class="metric-header">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-            <span>修改檔案</span>
-          </div>
-          <div class="metric-value">
-            <span id="countEdit">0 檔</span>
-            <span class="metric-diff" id="diffStats"></span>
-          </div>
+        <div class="stat-divider"></div>
+
+        <!-- Edited Files & Diffs -->
+        <div class="stat-pill" title="修改檔案與變更行數">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+          <span class="stat-label">變更</span>
+          <span class="stat-val" id="countEdit">0</span>
+          <span class="stat-badge" id="diffBadge" style="display: none;">+0 -0</span>
         </div>
+
+        <div class="stat-divider"></div>
 
         <!-- Commands Run -->
-        <div class="metric-card" id="cardCmd">
-          <div class="metric-header">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <polyline points="4 17 10 11 4 5"></polyline>
-              <line x1="12" y1="19" x2="20" y2="19"></line>
-            </svg>
-            <span>執行指令</span>
-          </div>
-          <div class="metric-value" id="countCmd">0 次</div>
+        <div class="stat-pill" title="執行終端指令次數">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+          <span class="stat-label">指令</span>
+          <span class="stat-val" id="countCmd">0</span>
         </div>
       </div>
 
@@ -461,7 +507,7 @@
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <span>等待使用者決策 (Ask Question)</span>
+          <span>等待確認決策</span>
         </div>
         <div class="ask-title" id="askTitle">正在等待您的回應...</div>
         <div class="ask-options" id="askOptions"></div>
@@ -470,12 +516,12 @@
       <!-- Activity Stream List -->
       <div class="activity-section">
         <div class="section-title">
-          <span>近期活動歷程</span>
-          <span id="activityCount" style="font-weight: normal; opacity: 0.7;">0 項</span>
+          <span>即時操作歷程</span>
+          <span id="activityCount" style="font-weight: normal; opacity: 0.65;">0 項</span>
         </div>
         <div class="activity-list" id="activityList">
-          <div class="activity-item" style="color: var(--text-muted); font-style: italic;">
-            暫無檔案或指令動作
+          <div class="activity-item" style="color: var(--text-muted); justify-content: center; font-style: italic;">
+            尚無執行動作
           </div>
         </div>
       </div>
@@ -483,27 +529,25 @@
   </div>
 
   <script>
-    // State
     let isCollapsed = false;
     let state = {
-      status: 'idle', // 'idle' | 'thinking' | 'running' | 'ask'
+      status: 'idle',
       statusText: '待命中',
       readCount: 0,
       editCount: 0,
       addLines: 0,
       delLines: 0,
       cmdCount: 0,
-      ask: null, // { question: string, options: string[] }
-      activities: [] // { type: 'read'|'edit'|'cmd', text: string, diff?: string }
+      ask: null,
+      activities: []
     };
 
-    // DOM Elements
     const container = document.getElementById('container');
-    const pulseDot = document.getElementById('pulseDot');
+    const statusCapsule = document.getElementById('statusCapsule');
     const statusText = document.getElementById('statusText');
     const countRead = document.getElementById('countRead');
     const countEdit = document.getElementById('countEdit');
-    const diffStats = document.getElementById('diffStats');
+    const diffBadge = document.getElementById('diffBadge');
     const countCmd = document.getElementById('countCmd');
     const askCard = document.getElementById('askCard');
     const askTitle = document.getElementById('askTitle');
@@ -515,7 +559,6 @@
     const btnClose = document.getElementById('btnClose');
     const btnFocus = document.getElementById('btnFocus');
 
-    // IPC Communication with Main Process
     let ipc = null;
     try {
       if (window.require) {
@@ -526,19 +569,21 @@
 
     function render() {
       // 1. Status Indicator
-      pulseDot.className = 'pulse-dot ' + (state.status || 'idle');
+      statusCapsule.className = 'status-capsule ' + (state.status || 'idle');
       statusText.innerText = state.statusText || '待命中';
 
       // 2. Metrics
-      countRead.innerText = `${state.readCount || 0} 檔`;
-      countEdit.innerText = `${state.editCount || 0} 檔`;
-      
-      let diffHtml = '';
-      if (state.addLines > 0) diffHtml += `<span class="diff-add">+${state.addLines}</span> `;
-      if (state.delLines > 0) diffHtml += `<span class="diff-del">-${state.delLines}</span>`;
-      diffStats.innerHTML = diffHtml;
+      countRead.innerText = String(state.readCount || 0);
+      countEdit.innerText = String(state.editCount || 0);
+      countCmd.innerText = String(state.cmdCount || 0);
 
-      countCmd.innerText = `${state.cmdCount || 0} 次`;
+      // Diff Badge
+      if (state.addLines > 0 || state.delLines > 0) {
+        diffBadge.style.display = 'inline-block';
+        diffBadge.innerText = `+${state.addLines || 0} -${state.delLines || 0}`;
+      } else {
+        diffBadge.style.display = 'none';
+      }
 
       // 3. Ask Question
       if (state.ask && state.ask.question && Array.isArray(state.ask.options) && state.ask.options.length > 0) {
@@ -549,12 +594,15 @@
           const btn = document.createElement('button');
           btn.className = 'ask-btn';
           btn.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;">
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
             <span>${escapeHtml(opt)}</span>
           `;
           btn.onclick = () => {
+            if (typeof window['__ag_click_option_' + idx] === 'function') {
+              window['__ag_click_option_' + idx]();
+            }
             if (ipc) {
               ipc.send('ag-widget-answer-question', idx);
             }
@@ -566,33 +614,36 @@
       }
 
       // 4. Activities
-      activityCount.innerText = `${state.activities?.length || 0} 項`;
-      if (state.activities && state.activities.length > 0) {
+      const acts = state.activities || [];
+      activityCount.innerText = `${acts.length} 項`;
+      if (acts.length > 0) {
         activityList.innerHTML = '';
-        state.activities.slice(-10).reverse().forEach(act => {
+        acts.slice(0, 10).forEach(act => {
           const item = document.createElement('div');
           item.className = 'activity-item';
           let badgeClass = 'badge-read';
           let tagText = 'READ';
-          let iconSvg = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>';
           if (act.type === 'edit') {
             badgeClass = 'badge-edit';
             tagText = 'EDIT';
-            iconSvg = '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>';
           } else if (act.type === 'cmd') {
             badgeClass = 'badge-cmd';
             tagText = 'CMD';
-            iconSvg = '<polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line>';
           }
 
           item.innerHTML = `
             <span class="badge-tag ${badgeClass}">${tagText}</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">${iconSvg}</svg>
             <span class="activity-text" title="${escapeHtml(act.text)}">${escapeHtml(act.text)}</span>
-            ${act.diff ? `<span class="metric-diff diff-add">${escapeHtml(act.diff)}</span>` : ''}
+            ${act.diff ? `<span class="metric-diff">${escapeHtml(act.diff)}</span>` : ''}
           `;
           activityList.appendChild(item);
         });
+      } else {
+        activityList.innerHTML = `
+          <div class="activity-item" style="color: var(--text-muted); justify-content: center; font-style: italic;">
+            尚無執行動作
+          </div>
+        `;
       }
     }
 
@@ -614,6 +665,9 @@
         container.classList.remove('collapsed');
         collapseIcon.setAttribute('points', '6 9 12 15 18 9');
       }
+      if (window.parent && window.parent.__ag_on_widget_collapse) {
+        window.parent.__ag_on_widget_collapse(isCollapsed);
+      }
       if (ipc) {
         ipc.send('ag-widget-toggle-collapse', isCollapsed);
       }
@@ -621,6 +675,9 @@
 
     btnCollapse.onclick = () => toggleCollapse();
     btnClose.onclick = () => {
+      if (window.parent && window.parent.__ag_on_widget_close) {
+        window.parent.__ag_on_widget_close();
+      }
       if (ipc) ipc.send('ag-widget-close');
     };
     btnFocus.onclick = () => {
@@ -637,7 +694,6 @@
       }
     };
 
-    // Listen for state updates from Main Process
     if (ipc) {
       ipc.on('ag-widget-update', (event, data) => {
         window.__ag_update_state(data);

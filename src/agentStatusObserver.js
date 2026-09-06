@@ -18,35 +18,74 @@
 function parseStepText(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
   const cleaned = rawText.replace(/\r/g, '').trim();
-  const parts = cleaned.includes('|')
-    ? cleaned.split('|').map(p => p.trim())
-    : cleaned.split('\n').map(p => p.trim()).filter(Boolean);
 
-  if (parts.length === 0) return null;
-  const verb = parts[0];
+  // If delimited by pipe '|'
+  if (cleaned.includes('|')) {
+    const parts = cleaned.split('|').map(p => p.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    const verb = parts[0];
 
-  if (/^(Edited|Modified|修改)/i.test(verb)) {
-    const target = parts[1] || 'File';
-    let addLines = 0;
-    let delLines = 0;
-    let diffStr = '';
+    if (/^(Edited|Modified|修改)/i.test(verb)) {
+      const target = parts[1] || 'File';
+      let addLines = 0;
+      let delLines = 0;
+      let diffStr = '';
 
-    for (let i = 2; i < parts.length; i++) {
-      const p = parts[i];
-      const addMatch = p.match(/^\+(\d+)/);
-      if (addMatch) {
-        addLines += parseInt(addMatch[1], 10);
+      for (let i = 2; i < parts.length; i++) {
+        const p = parts[i];
+        const addMatch = p.match(/^\+(\d+)/);
+        if (addMatch) {
+          addLines += parseInt(addMatch[1], 10);
+        }
+        const delMatch = p.match(/^-(\d+)/);
+        if (delMatch) {
+          delLines += parseInt(delMatch[1], 10);
+        }
       }
-      const delMatch = p.match(/^-(\d+)/);
-      if (delMatch) {
-        delLines += parseInt(delMatch[1], 10);
+
+      if (addLines > 0 || delLines > 0) {
+        diffStr = `+${addLines} -${delLines}`;
       }
+
+      return {
+        type: 'edit',
+        text: target,
+        diff: diffStr,
+        addLines,
+        delLines,
+      };
     }
 
-    if (addLines > 0 || delLines > 0) {
-      diffStr = `+${addLines} -${delLines}`;
+    if (/^(Explored|Read|Viewed|讀取)/i.test(verb)) {
+      const target = parts[1] || 'Files';
+      return {
+        type: 'read',
+        text: target,
+        diff: '',
+        addLines: 0,
+        delLines: 0,
+      };
     }
 
+    if (/^(Ran|Executed|Command|執行)/i.test(verb)) {
+      const cmd = parts[1] || 'Command';
+      return {
+        type: 'cmd',
+        text: cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd,
+        diff: '',
+        addLines: 0,
+        delLines: 0,
+      };
+    }
+  }
+
+  // Single-line DOM format (e.g. "Edited foo.js +10 -2", "Ran git status", "Explored 3 files")
+  const mEdit = cleaned.match(/^(?:Edited|Modified|修改)\s+(?:<>\s*)?([^\n+\-]+?)(?:\s+\+(\d+))?(?:\s+-(\d+))?$/i);
+  if (mEdit) {
+    const target = mEdit[1].trim();
+    const addLines = mEdit[2] ? parseInt(mEdit[2], 10) : 0;
+    const delLines = mEdit[3] ? parseInt(mEdit[3], 10) : 0;
+    const diffStr = (addLines > 0 || delLines > 0) ? `+${addLines} -${delLines}` : '';
     return {
       type: 'edit',
       text: target,
@@ -56,22 +95,26 @@ function parseStepText(rawText) {
     };
   }
 
-  if (/^(Explored|Read|Viewed|讀取)/i.test(verb)) {
-    const target = parts[1] || 'Files';
+  const mCmd = cleaned.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
+  if (mCmd) {
+    let cmd = mCmd[1].trim();
+    if (cmd.startsWith('node scratch/')) {
+      cmd = cmd.replace(/^node scratch\//, '');
+    }
     return {
-      type: 'read',
-      text: target,
+      type: 'cmd',
+      text: cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd,
       diff: '',
       addLines: 0,
       delLines: 0,
     };
   }
 
-  if (/^(Ran|Executed|Command|執行)/i.test(verb)) {
-    const cmd = parts[1] || 'Command';
+  const mRead = cleaned.match(/^(?:Explored|Read|Viewed|讀取)\s+(.+)$/i);
+  if (mRead) {
     return {
-      type: 'cmd',
-      text: cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd,
+      type: 'read',
+      text: mRead[1].trim(),
       diff: '',
       addLines: 0,
       delLines: 0,
@@ -222,47 +265,98 @@ function getObserverScript() {
 
       window.__agOptionButtons = optionButtons;
 
-      // 2. Scrape steps & metrics
-      var stepTexts = [];
-      var elements = document.querySelectorAll('.truncate, .relative, [class*="flex-row"], [class*="step"]');
-      for (var e = 0; e < elements.length; e++) {
-        var el = elements[e];
-        var txt = (el.innerText || '').trim();
-        if ((txt.startsWith('Edited\\n') || txt.startsWith('Explored\\n') || txt.startsWith('Ran\\n')) && el.children.length <= 4) {
-          stepTexts.push(txt.split('\\n').join(' | '));
+      // 2. Scrape files changed & diff metrics from header
+      var filesChangedCount = 0;
+      var totalAdd = 0;
+      var totalDel = 0;
+
+      var fHeaders = document.querySelectorAll('.files-changed-header');
+      for (var fh = 0; fh < fHeaders.length; fh++) {
+        var fht = (fHeaders[fh].innerText || '').trim();
+        var mf = fht.match(/(\d+)\s+file/i);
+        if (mf) {
+          var fc = parseInt(mf[1], 10);
+          if (fc > filesChangedCount) filesChangedCount = fc;
+        }
+        var ma = fht.match(/\+(\d+)/);
+        if (ma) {
+          var fa = parseInt(ma[1], 10);
+          if (fa > totalAdd) totalAdd = fa;
+        }
+        var md = fht.match(/-(\d+)/);
+        if (md) {
+          var fd = parseInt(md[1], 10);
+          if (fd > totalDel) totalDel = fd;
         }
       }
 
-      // Deduplicate consecutive identical steps
-      var uniqueSteps = [];
-      for (var s = 0; s < stepTexts.length; s++) {
-        if (uniqueSteps.indexOf(stepTexts[s]) === -1) {
-          uniqueSteps.push(stepTexts[s]);
+      // 3. Scrape step action nodes across DOM
+      var activities = [];
+      var seenRaw = {};
+      var seenEdits = {};
+      var seenReads = {};
+      var cmdCount = 0;
+
+      var allStepNodes = document.querySelectorAll('div.flex.flex-row.items-center.gap-1, button[class*="tabular-nums"], div.truncate');
+      for (var sn = 0; sn < allStepNodes.length; sn++) {
+        var raw = (allStepNodes[sn].innerText || '').trim().replace(/\s+/g, ' ');
+        if (!raw || seenRaw[raw]) continue;
+
+        // Pattern: Edited <file> +X -Y
+        var mEdit = raw.match(/^(?:Edited|Modified|修改)\s+(?:<>\s*)?([^\n+\-]+?)(?:\s+\+(\d+))?(?:\s+-(\d+))?$/i);
+        if (mEdit) {
+          seenRaw[raw] = true;
+          var fName = mEdit[1].trim();
+          seenEdits[fName] = true;
+          var add = mEdit[2] ? parseInt(mEdit[2], 10) : 0;
+          var del = mEdit[3] ? parseInt(mEdit[3], 10) : 0;
+          var diffStr = (add > 0 || del > 0) ? ('+' + add + ' -' + del) : '';
+          activities.push({ type: 'edit', text: fName, diff: diffStr });
+          continue;
+        }
+
+        // Pattern: Ran <cmd>
+        var mCmd = raw.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
+        if (mCmd) {
+          seenRaw[raw] = true;
+          var cmd = mCmd[1].trim();
+          if (cmd.indexOf('node scratch/') === 0) {
+            cmd = cmd.replace(/^node scratch\//, '');
+          }
+          cmdCount++;
+          activities.push({ type: 'cmd', text: cmd.length > 50 ? cmd.slice(0, 47) + '...' : cmd, diff: '' });
+          continue;
+        }
+
+        // Pattern: Explored <N> files
+        var mRead = raw.match(/^(?:Explored|Read|Viewed|讀取)\s+(.+)$/i);
+        if (mRead) {
+          seenRaw[raw] = true;
+          var rText = mRead[1].trim();
+          seenReads[rText] = true;
+          activities.push({ type: 'read', text: rText, diff: '' });
+          continue;
         }
       }
 
-      // 3. Detect thinking / working state
+      var readCount = Math.max(Object.keys(seenReads).length, activities.filter(function(a) { return a.type === 'read'; }).length);
+      var editCount = Math.max(filesChangedCount, Object.keys(seenEdits).length);
+
+      // 4. Detect thinking / working state
       var isWorking = false;
       var thinkingText = '';
-      var stopButtons = document.querySelectorAll('button');
-      for (var sb = 0; sb < stopButtons.length; sb++) {
-        var st = (stopButtons[sb].innerText || '').trim();
-        if (/^(Stop|Cancel|停止|中斷)$/i.test(st)) {
-          isWorking = true;
-          break;
-        }
+      var stopButtons = document.querySelectorAll('button[aria-label*="Cancel"], button[aria-label*="取消"], button[aria-label*="Stop"], button[aria-label*="停止"]');
+      if (stopButtons.length > 0) {
+        isWorking = true;
       }
 
-      // Find thought/worked timer buttons
-      var timerButtons = document.querySelectorAll('button');
-      for (var tb = 0; tb < timerButtons.length; tb++) {
-        var tt = (timerButtons[tb].innerText || '').trim();
-        if (/^(Thought for|Worked for|Thinking|思考中|運作中)/i.test(tt)) {
-          thinkingText = tt;
-          // If this button is near the bottom and contains an active spinner, it's working
-          if (timerButtons[tb].querySelector('svg[class*="animate"], [class*="spinner"]')) {
-            isWorking = true;
-          }
+      var allButtons = Array.from(document.querySelectorAll('button[class*="tabular-nums"]'));
+      var workingBtn = allButtons.length > 0 ? allButtons[allButtons.length - 1] : null;
+      if (workingBtn) {
+        var wText = (workingBtn.innerText || '').trim();
+        if (wText.includes('Thought') || wText.includes('Worked')) {
+          thinkingText = wText;
+          isWorking = true;
         }
       }
 
@@ -273,71 +367,24 @@ function getObserverScript() {
         status = 'ask';
         statusText = '等待使用者決策';
       } else if (isWorking) {
-        status = 'running';
+        if (thinkingText && thinkingText.includes('Thought')) {
+          status = 'thinking';
+        } else {
+          status = 'running';
+        }
         statusText = thinkingText || 'Agent 運作中...';
       }
-
-      // Parse activity metrics
-      var readCount = 0;
-      var editCount = 0;
-      var addLines = 0;
-      var delLines = 0;
-      var cmdCount = 0;
-      var activities = [];
-      var seenEdits = {};
-      var seenReads = {};
-
-      for (var u = 0; u < uniqueSteps.length; u++) {
-        var parts = uniqueSteps[u].split('|').map(function(p) { return p.trim(); });
-        if (parts.length === 0) continue;
-        var verb = parts[0];
-
-        if (/^(Edited|Modified|修改)/i.test(verb)) {
-          var target = parts[1] || 'File';
-          var aL = 0;
-          var dL = 0;
-          for (var pIdx = 2; pIdx < parts.length; pIdx++) {
-            var am = parts[pIdx].match(/^\\+(\\d+)/);
-            if (am) aL += parseInt(am[1], 10);
-            var dm = parts[pIdx].match(/^-(\\d+)/);
-            if (dm) dL += parseInt(dm[1], 10);
-          }
-          seenEdits[target] = true;
-          addLines += aL;
-          delLines += dL;
-          activities.push({
-            type: 'edit',
-            text: target,
-            diff: (aL > 0 || dL > 0) ? ('+' + aL + ' -' + dL) : ''
-          });
-        } else if (/^(Explored|Read|讀取)/i.test(verb)) {
-          var rTarget = parts[1] || 'Files';
-          seenReads[rTarget] = true;
-          activities.push({ type: 'read', text: rTarget, diff: '' });
-        } else if (/^(Ran|Executed|執行)/i.test(verb)) {
-          var cTarget = parts[1] || 'Command';
-          cmdCount++;
-          activities.push({
-            type: 'cmd',
-            text: cTarget.length > 50 ? cTarget.slice(0, 47) + '...' : cTarget,
-            diff: ''
-          });
-        }
-      }
-
-      readCount = Object.keys(seenReads).length;
-      editCount = Object.keys(seenEdits).length;
 
       var payload = {
         status: status,
         statusText: statusText,
         readCount: readCount,
         editCount: editCount,
-        addLines: addLines,
-        delLines: delLines,
+        addLines: totalAdd,
+        delLines: totalDel,
         cmdCount: cmdCount,
         ask: askInfo,
-        activities: activities.slice(-15)
+        activities: activities.slice(0, 15)
       };
 
       var payloadJson = JSON.stringify(payload);

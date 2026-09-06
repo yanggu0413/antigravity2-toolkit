@@ -74,6 +74,22 @@ async function runWidgetTests() {
     assert.strictEqual(cmdStep.type, 'cmd');
     assert.strictEqual(cmdStep.text, 'git status');
 
+    // Test real DOM single-line space-separated format
+    const domEditStep = agentStatusObserver.parseStepText('Edited src/widget/widget.html +88 -6');
+    assert.strictEqual(domEditStep.type, 'edit');
+    assert.strictEqual(domEditStep.text, 'src/widget/widget.html');
+    assert.strictEqual(domEditStep.diff, '+88 -6');
+    assert.strictEqual(domEditStep.addLines, 88);
+    assert.strictEqual(domEditStep.delLines, 6);
+
+    const domCmdStep = agentStatusObserver.parseStepText('Ran node scratch/test.js');
+    assert.strictEqual(domCmdStep.type, 'cmd');
+    assert.strictEqual(domCmdStep.text, 'test.js');
+
+    const domReadStep = agentStatusObserver.parseStepText('Explored 5 files');
+    assert.strictEqual(domReadStep.type, 'read');
+    assert.strictEqual(domReadStep.text, '5 files');
+
     const metrics = agentStatusObserver.extractMetrics([
       'Explored | 3 files',
       'Edited | index.js | +10 | -2',
