@@ -54,10 +54,10 @@ function createCli() {
 
         const status = backupManager.getPatchStatus();
         if (!status.isPatched && status.mode !== 'folder') {
-          console.log(pc.yellow('\n⚠️  Notice: Antigravity is currently in Stock (Official) mode.'));
-          console.log(pc.yellow('   Run `ag-toolkit patch` to activate custom wallpaper in the app.'));
+          console.log(pc.yellow('\n[!] Notice: Antigravity is currently in Stock (Official) mode.'));
+          console.log(pc.yellow('    Run `ag-toolkit patch` to activate custom wallpaper in the app.'));
         } else {
-          console.log(pc.cyan('⚡ Hot-reloaded immediately in running Antigravity window!'));
+          console.log(pc.cyan('[Hot-Reload] Applied immediately in running Antigravity window!'));
         }
       } catch (err) {
         console.error(pc.red(`✖ Error: ${err.message}`));
@@ -75,7 +75,7 @@ function createCli() {
       try {
         themeManager.clearWallpaper();
         console.log(pc.green('✔ Removed custom wallpaper. Official stock appearance restored!'));
-        console.log(pc.cyan('⚡ Hot-reloaded immediately in running Antigravity window!'));
+        console.log(pc.cyan('[Hot-Reload] Applied immediately in running Antigravity window!'));
       } catch (err) {
         console.error(pc.red(`✖ Error: ${err.message}`));
         process.exit(1);
@@ -311,8 +311,8 @@ function createCli() {
 
         const status = backupManager.getPatchStatus();
         if (!status.isPatched && status.mode !== 'folder') {
-          console.log(pc.yellow('\n⚠️  Notice: Antigravity is currently in Stock (Official) mode.'));
-          console.log(pc.yellow('   Run `ag-toolkit patch` or `ag-toolkit dev-mode on` to activate in the app.'));
+          console.log(pc.yellow('\n[!] Notice: Antigravity is currently in Stock (Official) mode.'));
+          console.log(pc.yellow('    Run `ag-toolkit patch` or `ag-toolkit dev-mode on` to activate in the app.'));
         }
       } catch (err) {
         console.error(pc.red(`✖ Error: ${err.message}`));

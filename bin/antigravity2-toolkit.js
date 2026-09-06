@@ -34,9 +34,9 @@ async function main() {
     if (dirIdx !== -1 && args[dirIdx + 1]) installDir = args[dirIdx + 1];
 
     if (!noKill) processManager.killProcesses();
-    console.log(pc.cyan('Restoring official stock Antigravity...'));
+    console.log(pc.cyan('正在還原為官方原版 Antigravity...'));
     const res = backupManager.restoreAsar(installDir);
-    console.log(pc.green(`✔ Official app.asar restored to: ${res.restoredTo}`));
+    console.log(pc.green(`[成功] 官方原版 app.asar 已還原至: ${res.restoredTo}`));
     return;
   } else if ((args.includes('--tw') || args.includes('--brand-title')) && !args.some(a => ['patch', 'locale', 'localize', 'set', 'theme', 'status'].includes(a))) {
     // Direct localization install request from legacy scripts
@@ -69,13 +69,13 @@ async function main() {
       },
     });
 
-    console.log(pc.green(`✔ ${langName} localization deployed successfully!`));
-    console.log(pc.gray(`  ASAR: ${res.asarPath}`));
+    console.log(pc.green(`[成功] ${langName} 在地化部署成功！`));
+    console.log(pc.gray(`  ASAR 路徑: ${res.asarPath}`));
 
     if (wasRunning && !noKill) {
       try {
         processManager.launchApp(installDir);
-        console.log(pc.green('✔ Antigravity restarted successfully!'));
+        console.log(pc.green('[成功] Antigravity 重新啟動成功！'));
       } catch (_) {}
     }
     return;
@@ -86,6 +86,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(pc.red('Fatal error:'), err.message || err);
+  console.error(pc.red('[錯誤] 執行異常:'), err.message || err);
   process.exit(1);
 });

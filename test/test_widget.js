@@ -244,7 +244,13 @@ async function runWidgetTests() {
     const observerContent = fs.readFileSync(path.join(__dirname, '..', 'src', 'agentStatusObserver.js'), 'utf8');
     assert(!emojiRegex.test(observerContent), 'agentStatusObserver.js MUST NOT contain any emoji characters');
 
-    console.log('  ✔ Strictly zero emojis verified: 100% SVG vector icons utilized');
+    const interactiveContent = fs.readFileSync(path.join(__dirname, '..', 'src', 'interactive.js'), 'utf8');
+    assert(!emojiRegex.test(interactiveContent), 'interactive.js MUST NOT contain any emoji characters');
+
+    const batContent = fs.readFileSync(path.join(__dirname, '..', '啟動工具箱.bat'), 'utf8');
+    assert(!emojiRegex.test(batContent), '啟動工具箱.bat MUST NOT contain any emoji characters');
+
+    console.log('  ✔ Strictly zero emojis verified: 100% SVG vector icons utilized and CLI/Bat clean');
 
     console.log('Desktop Floating Widget Unit Tests PASSED!\n');
     return true;
