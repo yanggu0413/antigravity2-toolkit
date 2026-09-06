@@ -118,6 +118,12 @@ async function runWidgetTests() {
 
     const statusIdle = agentStatusObserver.deduceAgentStatus({ hasAsk: false, isWorking: false });
     assert.strictEqual(statusIdle.status, 'idle');
+
+    // Verify settings modal exclusion in observer code
+    const observerScript = agentStatusObserver.getObserverScript();
+    assert.ok(observerScript.includes('設定|Settings|Preferences'), 'Observer script must exclude settings modal');
+    const scraperExpr = agentStatusObserver.getScraperExpression();
+    assert.ok(scraperExpr.includes('設定|Settings|Preferences'), 'Scraper expression must exclude settings modal');
     console.log('  ✔ Agent step parser, diff metrics (+add -del), and status deduction validated');
 
     // 4. Mock Electron Window Lifecycle & IPC

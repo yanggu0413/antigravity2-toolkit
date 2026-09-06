@@ -239,25 +239,58 @@ function getObserverScript() {
       for (var d = 0; d < dialogs.length; d++) {
         var dlg = dialogs[d];
         var dlgText = dlg.innerText || '';
-        var btns = dlg.querySelectorAll('button');
-        if (btns.length >= 2) {
-          var opts = [];
-          var btnList = [];
-          for (var b = 0; b < btns.length; b++) {
-            var bt = btns[b].innerText.trim();
-            if (bt && !/^(關閉|Close|X)$/i.test(bt)) {
-              opts.push(bt);
-              btnList.push(btns[b]);
-            }
-          }
-          if (opts.length >= 2) {
-            var lines = dlgText.split('\\n').map(function(s) { return s.trim(); }).filter(Boolean);
-            var qTitle = lines[0] || '需要您的確認或決策';
-            askInfo = { question: qTitle, options: opts };
-            optionButtons = btnList;
-            askFound = true;
+
+        // 1. Explicit Exclusions: Ignore Settings, Preferences, Feedback, About, Menubars
+        var dlgAttr = (dlg.className || '') + ' ' + (dlg.getAttribute('aria-label') || '') + ' ' + (dlg.id || '');
+        if (/settings|preferences|feedback|about|menubar|context-menu/i.test(dlgAttr)) {
+          continue;
+        }
+        var lines = dlgText.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+        var qTitle = lines[0] || '';
+        if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(qTitle)) {
+          continue;
+        }
+        if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
+          continue;
+        }
+        if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
+          continue;
+        }
+
+        // 2. Inclusion Requirements: An Agent question/decision modal MUST have Submit/Skip buttons or option inputs
+        var hasSubmitOrSkip = false;
+        var allDlgBtns = dlg.querySelectorAll('button');
+        for (var sbIdx = 0; sbIdx < allDlgBtns.length; sbIdx++) {
+          var sbText = (allDlgBtns[sbIdx].innerText || '').trim();
+          if (/^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(sbText)) {
+            hasSubmitOrSkip = true;
             break;
           }
+        }
+        var optionInputs = dlg.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="option"], [data-option]');
+
+        // If neither Submit/Skip nor option inputs are present, this is a standard menu or UI modal, NOT an agent question
+        if (!hasSubmitOrSkip && optionInputs.length === 0) {
+          continue;
+        }
+
+        // 3. Collect choices
+        var opts = [];
+        var btnList = [];
+        for (var b = 0; b < allDlgBtns.length; b++) {
+          var bt = allDlgBtns[b].innerText.trim();
+          if (bt && !/^(關閉|Close|X|Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(bt)) {
+            if (!/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
+              opts.push(bt);
+              btnList.push(allDlgBtns[b]);
+            }
+          }
+        }
+        if (opts.length >= 2 || (hasSubmitOrSkip && opts.length >= 1)) {
+          askInfo = { question: qTitle || '需要您的確認或決策', options: opts };
+          optionButtons = btnList;
+          askFound = true;
+          break;
         }
       }
 
@@ -267,13 +300,16 @@ function getObserverScript() {
         for (var i = 0; i < allBtns.length; i++) {
           var bText = (allBtns[i].innerText || '').trim();
           if (/^(Proceed|Approve|同意執行|繼續執行)/i.test(bText)) {
-            askInfo = {
-              question: '任務執行計畫已就緒，等待您的批准',
-              options: [bText, '檢視計畫詳情']
-            };
-            optionButtons = [allBtns[i]];
-            askFound = true;
-            break;
+            var rect = allBtns[i].getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              askInfo = {
+                question: '任務執行計畫已就緒，等待您的批准',
+                options: [bText, '檢視計畫詳情']
+              };
+              optionButtons = [allBtns[i]];
+              askFound = true;
+              break;
+            }
           }
         }
       }
@@ -524,21 +560,53 @@ function getScraperExpression() {
       for (let d = 0; d < dialogs.length; d++) {
         const dlg = dialogs[d];
         const dlgText = dlg.innerText || '';
-        const btns = dlg.querySelectorAll('button');
-        if (btns.length >= 2) {
-          const opts = [];
-          for (let b = 0; b < btns.length; b++) {
-            const bt = (btns[b].innerText || '').trim();
-            if (bt && !/^(關閉|Close|X)$/i.test(bt)) {
+
+        // 1. Explicit Exclusions: Ignore Settings, Preferences, Feedback, About, Menubars
+        const dlgAttr = (dlg.className || '') + ' ' + (dlg.getAttribute('aria-label') || '') + ' ' + (dlg.id || '');
+        if (/settings|preferences|feedback|about|menubar|context-menu/i.test(dlgAttr)) {
+          continue;
+        }
+        const lines = dlgText.split('\\n').map(s => s.trim()).filter(Boolean);
+        const qTitle = lines[0] || '';
+        if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(qTitle)) {
+          continue;
+        }
+        if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
+          continue;
+        }
+        if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
+          continue;
+        }
+
+        // 2. Inclusion Requirements: Must have Submit/Skip or option inputs
+        let hasSubmitOrSkip = false;
+        const allDlgBtns = dlg.querySelectorAll('button');
+        for (let sbIdx = 0; sbIdx < allDlgBtns.length; sbIdx++) {
+          const sbText = (allDlgBtns[sbIdx].innerText || '').trim();
+          if (/^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(sbText)) {
+            hasSubmitOrSkip = true;
+            break;
+          }
+        }
+        const optionInputs = dlg.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="option"], [data-option]');
+
+        if (!hasSubmitOrSkip && optionInputs.length === 0) {
+          continue;
+        }
+
+        const opts = [];
+        for (let b = 0; b < allDlgBtns.length; b++) {
+          const bt = (allDlgBtns[b].innerText || '').trim();
+          if (bt && !/^(關閉|Close|X|Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(bt)) {
+            if (!/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
               opts.push(bt);
             }
           }
-          if (opts.length >= 2) {
-            const lines = dlgText.split('\\n').map(s => s.trim()).filter(Boolean);
-            askInfo = { question: lines[0] || '需要您的確認或決策', options: opts };
-            askFound = true;
-            break;
-          }
+        }
+        if (opts.length >= 2 || (hasSubmitOrSkip && opts.length >= 1)) {
+          askInfo = { question: qTitle || '需要您的確認或決策', options: opts };
+          askFound = true;
+          break;
         }
       }
 
@@ -547,12 +615,15 @@ function getScraperExpression() {
         for (let i = 0; i < allBtns.length; i++) {
           const bText = (allBtns[i].innerText || '').trim();
           if (/^(Proceed|Approve|同意執行|繼續執行)/i.test(bText)) {
-            askInfo = {
-              question: '任務執行計畫已就緒，等待您的批准',
-              options: [bText, '檢視計畫詳情']
-            };
-            askFound = true;
-            break;
+            const rect = allBtns[i].getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              askInfo = {
+                question: '任務執行計畫已就緒，等待您的批准',
+                options: [bText, '檢視計畫詳情']
+              };
+              askFound = true;
+              break;
+            }
           }
         }
       }
