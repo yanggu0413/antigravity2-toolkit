@@ -122,31 +122,46 @@ div[class*="sticky"]::after {
   display: none !important;
 }
 
-/* User message bubble: neat compact frosted card that hugs content instead of full-width billboard */
+/* User message card: clean full-width official card with clear action button layout */
 div[class*="group/user-input-step"] {
-  align-items: flex-start !important;
+  align-items: stretch !important;
+  width: 100% !important;
 }
 
 div[class*="group/user-input-step"] > div {
   position: relative !important;
-  width: fit-content !important;
-  min-width: 180px !important;
-  max-width: 90% !important;
-  background-color: color-mix(in srgb, var(--card) 85%, transparent) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  background-color: var(--card) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border: 1px solid var(--card-border) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
 }
 
 div[class*="group/user-input-step"] div.bg-card {
   background-color: transparent !important;
-  position: relative !important;
-  padding-right: 6.5rem !important;
 }
 
-/* Ensure prompt text reserves right-hand clearance for floating action buttons */
+/* Ensure prompt text wraps properly without overflow */
 div[class*="group/user-input-step"] div.whitespace-pre-wrap {
   word-break: break-word !important;
+}
+
+/* Step/Tool buttons: compact pill styling with soft, subtle frosted hover */
+button[class*="tabular-nums"][class*="hover:bg-muted"],
+button.group.flex.items-center.tabular-nums {
+  width: fit-content !important;
+  max-width: 100% !important;
+  transition: background-color 0.15s ease, opacity 0.15s ease !important;
+}
+
+button[class*="tabular-nums"][class*="hover:bg-muted"]:hover,
+button.group.flex.items-center.tabular-nums:hover {
+  background-color: color-mix(in srgb, var(--muted) 45%, transparent) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
 }
 
 /* Remove bottom fade gradient bar that creates an ugly dark shadow on the wallpaper */
@@ -231,31 +246,46 @@ div[class*="sticky"]::after {
   display: none !important;
 }
 
-/* User message bubble: neat compact frosted card that hugs content instead of full-width billboard */
+/* User message card: clean full-width official card with clear action button layout */
 div[class*="group/user-input-step"] {
-  align-items: flex-start !important;
+  align-items: stretch !important;
+  width: 100% !important;
 }
 
 div[class*="group/user-input-step"] > div {
   position: relative !important;
-  width: fit-content !important;
-  min-width: 180px !important;
-  max-width: 90% !important;
-  background-color: color-mix(in srgb, var(--card) 85%, transparent) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  background-color: var(--card) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border: 1px solid var(--card-border) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
 }
 
 div[class*="group/user-input-step"] div.bg-card {
   background-color: transparent !important;
-  position: relative !important;
-  padding-right: 6.5rem !important;
 }
 
-/* Ensure prompt text reserves right-hand clearance for floating action buttons */
+/* Ensure prompt text wraps properly without overflow */
 div[class*="group/user-input-step"] div.whitespace-pre-wrap {
   word-break: break-word !important;
+}
+
+/* Step/Tool buttons: compact pill styling with soft, subtle frosted hover */
+button[class*="tabular-nums"][class*="hover:bg-muted"],
+button.group.flex.items-center.tabular-nums {
+  width: fit-content !important;
+  max-width: 100% !important;
+  transition: background-color 0.15s ease, opacity 0.15s ease !important;
+}
+
+button[class*="tabular-nums"][class*="hover:bg-muted"]:hover,
+button.group.flex.items-center.tabular-nums:hover {
+  background-color: color-mix(in srgb, var(--muted) 45%, transparent) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
 }
 
 /* Remove bottom fade gradient bar that creates an ugly dark shadow on the wallpaper */
