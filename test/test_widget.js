@@ -168,6 +168,12 @@ async function runWidgetTests() {
       getPosition() { return [this.bounds.x, this.bounds.y]; }
       getBounds() { return { ...this.bounds }; }
       setBounds(b) { this.bounds = { ...this.bounds, ...b }; }
+      setAlwaysOnTop(flag, level, relativeLevel) {
+        this.alwaysOnTop = { flag, level, relativeLevel };
+      }
+      moveTop() {}
+      setVisibleOnAllWorkspaces() {}
+      restore() {}
       async loadFile(file) { this.loadedUrl = file; }
       async loadURL(url) { this.loadedUrl = url; }
     }
@@ -198,25 +204,35 @@ async function runWidgetTests() {
     assert.strictEqual(win.options.transparent, true, 'Window must be transparent');
     assert.strictEqual(win.options.frame, false, 'Window must be frameless');
     assert.strictEqual(win.options.alwaysOnTop, true, 'Window must be always on top');
+    assert.strictEqual(win.options.maximizable, false, 'Window must not be maximizable');
+    assert.strictEqual(win.options.minimizable, false, 'Window must not be minimizable');
+    assert.strictEqual(win.options.fullscreenable, false, 'Window must not be fullscreenable');
+    assert(win.alwaysOnTop, 'Window must have setAlwaysOnTop invoked');
+    assert.strictEqual(win.alwaysOnTop.flag, true);
+    assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
     // Simulate ready-to-show
     win.emit('ready-to-show');
     assert(win.isVisible(), 'Window should become visible on ready-to-show');
+    assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
     // Test Collapse IPC
     assert(ipcHandlers['ag-widget-toggle-collapse'], 'Must register ag-widget-toggle-collapse handler');
     ipcHandlers['ag-widget-toggle-collapse']({}, true);
     assert.strictEqual(win.getBounds().height, 38, 'Height must collapse to 38px');
     assert.strictEqual(configManager.getFloatingWidgetConfig().collapsed, true);
+    assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
     ipcHandlers['ag-widget-toggle-collapse']({}, false);
     assert.strictEqual(win.getBounds().height, 240, 'Height must expand to 240px');
     assert.strictEqual(configManager.getFloatingWidgetConfig().collapsed, false);
+    assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
     // Test Focus Main Window IPC
     assert(ipcHandlers['ag-widget-focus-main'], 'Must register ag-widget-focus-main handler');
     ipcHandlers['ag-widget-focus-main']({});
     assert(mainFocused, 'Main window must be focused');
+    assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
     // Test Answer Question IPC
     assert(ipcHandlers['ag-widget-answer-question'], 'Must register ag-widget-answer-question handler');

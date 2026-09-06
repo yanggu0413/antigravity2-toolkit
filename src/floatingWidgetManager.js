@@ -144,6 +144,41 @@ function isPositionOnAnyDisplay(x, y, displays = []) {
 }
 
 /**
+ * Enforces highest Z-order level so the floating widget stays permanently on top of all windows.
+ */
+function enforceAlwaysOnTop() {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  const config = getFloatingWidgetConfig();
+  if (config.alwaysOnTop === false) return;
+
+  try {
+    if (typeof widgetWindow.setAlwaysOnTop === 'function') {
+      try {
+        widgetWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      } catch (_) {
+        try {
+          widgetWindow.setAlwaysOnTop(true, 'screen-saver');
+        } catch (_) {
+          widgetWindow.setAlwaysOnTop(true);
+        }
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof widgetWindow.setVisibleOnAllWorkspaces === 'function') {
+      widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof widgetWindow.moveTop === 'function') {
+      widgetWindow.moveTop();
+    }
+  } catch (_) {}
+}
+
+/**
  * Initializes the Desktop Floating Widget window and IPC bindings.
  * @param {object} mainWin 
  * @param {object} [options] 
@@ -214,6 +249,9 @@ function init(mainWin, options = {}) {
     alwaysOnTop: config.alwaysOnTop !== false,
     skipTaskbar: true,
     resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
     show: false,
     focusable: true,
     webPreferences: {
@@ -222,6 +260,8 @@ function init(mainWin, options = {}) {
       devTools: true,
     },
   });
+
+  enforceAlwaysOnTop();
 
   const htmlPath = resolveWidgetHtmlPath();
   if (typeof widgetWindow.loadFile === 'function') {
@@ -237,11 +277,37 @@ function init(mainWin, options = {}) {
     } else {
       widgetWindow.show();
     }
+    enforceAlwaysOnTop();
     updateStatus({ isCollapsed: isCollapsedState });
   };
 
   widgetWindow.once('ready-to-show', showWidget);
   setTimeout(showWidget, 800);
+
+  // Prevent accidental minimization into nowhere
+  widgetWindow.on('minimize', (event) => {
+    if (event && typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      if (typeof widgetWindow.restore === 'function') {
+        widgetWindow.restore();
+      }
+      enforceAlwaysOnTop();
+    }
+  });
+
+  // Re-assert topmost priority when losing focus so Windows DWM never sinks the widget
+  widgetWindow.on('blur', () => {
+    enforceAlwaysOnTop();
+  });
+
+  // Whenever main window gets focus, restore, or show, ensure widget stays floating on top
+  if (mainWindowRef && typeof mainWindowRef.on === 'function') {
+    mainWindowRef.on('focus', enforceAlwaysOnTop);
+    mainWindowRef.on('restore', enforceAlwaysOnTop);
+    mainWindowRef.on('show', enforceAlwaysOnTop);
+  }
 
   // Track dragging / movement to remember coordinates
   widgetWindow.on('move', () => {
@@ -254,6 +320,7 @@ function init(mainWin, options = {}) {
         updateFloatingWidgetConfig({
           position: { x: curX, y: curY },
         });
+        enforceAlwaysOnTop();
       } catch (_) {}
     }, 500);
   });
@@ -289,6 +356,7 @@ function setupIpcHandlers(electron) {
         width: bounds.width,
         height: targetHeight,
       });
+      enforceAlwaysOnTop();
     }
     updateFloatingWidgetConfig({ collapsed: isCollapsedState });
   });
@@ -308,6 +376,8 @@ function setupIpcHandlers(electron) {
       }
       mainWindowRef.show();
       mainWindowRef.focus();
+      // Crucial: Re-assert widget window stays on top of main window
+      enforceAlwaysOnTop();
     }
   });
 
@@ -358,6 +428,7 @@ function toggle() {
     } else {
       widgetWindow.show();
     }
+    enforceAlwaysOnTop();
   }
 }
 
@@ -368,6 +439,7 @@ function show() {
     } else {
       widgetWindow.show();
     }
+    enforceAlwaysOnTop();
   } else if (mainWindowRef) {
     init(mainWindowRef, { force: true });
   }
@@ -406,5 +478,6 @@ module.exports = {
   getCustomUiDir,
   getFloatingWidgetConfig,
   updateFloatingWidgetConfig,
+  enforceAlwaysOnTop,
   getWindow: () => widgetWindow,
 };

@@ -3,30 +3,46 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-let floatingWidgetManager = null;
-let agentStatusObserver = null;
-try {
-  floatingWidgetManager = require('./floatingWidgetManager');
-} catch (_) {
-  try {
-    floatingWidgetManager = require(path.join(__dirname, 'floatingWidgetManager'));
-  } catch (_) {}
-}
-
-try {
-  agentStatusObserver = require('./agentStatusObserver');
-} catch (_) {
-  try {
-    agentStatusObserver = require(path.join(__dirname, 'agentStatusObserver'));
-  } catch (_) {}
-}
-
-
 function getCustomUiDir() {
   if (process.env.ANTIGRAVITY_CUSTOM_UI_DIR) {
     return path.resolve(process.env.ANTIGRAVITY_CUSTOM_UI_DIR);
   }
   return path.join(os.homedir(), '.gemini', 'antigravity', 'custom-ui');
+}
+
+let floatingWidgetManager = null;
+let agentStatusObserver = null;
+
+try {
+  const customWidgetPath = path.join(getCustomUiDir(), 'floatingWidgetManager.js');
+  if (fs.existsSync(customWidgetPath)) {
+    floatingWidgetManager = require(customWidgetPath);
+  }
+} catch (_) {}
+if (!floatingWidgetManager) {
+  try {
+    floatingWidgetManager = require('./floatingWidgetManager');
+  } catch (_) {
+    try {
+      floatingWidgetManager = require(path.join(__dirname, 'floatingWidgetManager'));
+    } catch (_) {}
+  }
+}
+
+try {
+  const customObserverPath = path.join(getCustomUiDir(), 'agentStatusObserver.js');
+  if (fs.existsSync(customObserverPath)) {
+    agentStatusObserver = require(customObserverPath);
+  }
+} catch (_) {}
+if (!agentStatusObserver) {
+  try {
+    agentStatusObserver = require('./agentStatusObserver');
+  } catch (_) {
+    try {
+      agentStatusObserver = require(path.join(__dirname, 'agentStatusObserver'));
+    } catch (_) {}
+  }
 }
 
 function getConfigFilePath() {

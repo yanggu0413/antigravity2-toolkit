@@ -103,6 +103,8 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       transition: all 0.2s ease;
+      -webkit-app-region: no-drag;
+      cursor: default;
     }
 
     .pulse-dot {
@@ -630,19 +632,19 @@
       </div>
 
       <div class="controls">
-        <button class="btn-icon" id="btnFocus" title="聚焦主視窗">
+        <button class="btn-icon" id="btnFocus" title="聚焦主視窗 (浮窗維持置頂)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
             <polyline points="15 3 21 3 21 9"></polyline>
             <line x1="10" y1="14" x2="21" y2="3"></line>
           </svg>
         </button>
-        <button class="btn-icon" id="btnCollapse" title="折疊 / 展開">
+        <button class="btn-icon" id="btnCollapse" title="折疊 / 展開浮窗">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" id="collapseIcon">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </button>
-        <button class="btn-icon" id="btnClose" title="隱藏浮窗 (Ctrl+Shift+W 喚醒)">
+        <button class="btn-icon" id="btnClose" title="隱藏浮窗 (可隨時按 Ctrl+Shift+W 喚醒)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
