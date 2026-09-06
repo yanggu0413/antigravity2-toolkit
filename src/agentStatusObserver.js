@@ -95,7 +95,7 @@ function parseStepText(rawText) {
     };
   }
 
-  const mCmdGroup = cleaned.match(/^(?:Ran|Run|Executed|執行中?)\s+(\d+)\s+commands?$/i) || cleaned.match(/^(\d+)\s+commands?$/i);
+  const mCmdGroup = cleaned.match(/^(?:Ran|Run|Executed|執行中?|已執行)?\s*(\d+)\s*(?:commands?|個?(?:指令|命令))$/i);
   if (mCmdGroup) {
     const count = parseInt(mCmdGroup[1], 10);
     return {
@@ -125,7 +125,7 @@ function parseStepText(rawText) {
     };
   }
 
-  const mRead = cleaned.match(/^(?:Explored|Read|Viewed|讀取)\s+(.+)$/i);
+  const mRead = cleaned.match(/^(?:Explored|Read|Viewed|讀取|已探索|探索)\s*(?:file\s+)?(.+)$/i);
   if (mRead) {
     return {
       type: 'read',
@@ -331,10 +331,7 @@ function getObserverScript() {
         }
 
         // Pattern: Ran <N> commands or <N> commands
-        var mCmdGroup = raw.match(/^(?:Ran|Run|Executed|執行中?)\s+(\d+)\s+commands?$/i);
-        if (!mCmdGroup) {
-          mCmdGroup = raw.match(/^(\d+)\s+commands?$/i);
-        }
+        var mCmdGroup = raw.match(/^(?:Ran|Run|Executed|執行中?|已執行)?\s*(\d+)\s*(?:commands?|個?(?:指令|命令))$/i);
         if (mCmdGroup) {
           seenRaw[raw] = true;
           var nCmds = parseInt(mCmdGroup[1], 10);
@@ -358,7 +355,7 @@ function getObserverScript() {
         }
 
         // Pattern: Explored <N> files
-        var mRead = raw.match(/^(?:Explored|Read|Viewed|讀取)\s+(.+)$/i);
+        var mRead = raw.match(/^(?:Explored|Read|Viewed|讀取|已探索|探索)\s*(?:file\s+)?(.+)$/i);
         if (mRead) {
           seenRaw[raw] = true;
           var rText = mRead[1].trim();
