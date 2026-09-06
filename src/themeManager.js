@@ -128,8 +128,9 @@ div[class*="group/user-input-step"] {
 }
 
 div[class*="group/user-input-step"] > div {
+  position: relative !important;
   width: fit-content !important;
-  min-width: 140px !important;
+  min-width: 180px !important;
   max-width: 90% !important;
   background-color: color-mix(in srgb, var(--card) 85%, transparent) !important;
   backdrop-filter: blur(16px) !important;
@@ -139,6 +140,13 @@ div[class*="group/user-input-step"] > div {
 
 div[class*="group/user-input-step"] div.bg-card {
   background-color: transparent !important;
+  position: relative !important;
+  padding-right: 6.5rem !important;
+}
+
+/* Ensure prompt text reserves right-hand clearance for floating action buttons */
+div[class*="group/user-input-step"] div.whitespace-pre-wrap {
+  word-break: break-word !important;
 }
 
 /* Remove bottom fade gradient bar that creates an ugly dark shadow on the wallpaper */
@@ -229,8 +237,9 @@ div[class*="group/user-input-step"] {
 }
 
 div[class*="group/user-input-step"] > div {
+  position: relative !important;
   width: fit-content !important;
-  min-width: 140px !important;
+  min-width: 180px !important;
   max-width: 90% !important;
   background-color: color-mix(in srgb, var(--card) 85%, transparent) !important;
   backdrop-filter: blur(16px) !important;
@@ -240,6 +249,13 @@ div[class*="group/user-input-step"] > div {
 
 div[class*="group/user-input-step"] div.bg-card {
   background-color: transparent !important;
+  position: relative !important;
+  padding-right: 6.5rem !important;
+}
+
+/* Ensure prompt text reserves right-hand clearance for floating action buttons */
+div[class*="group/user-input-step"] div.whitespace-pre-wrap {
+  word-break: break-word !important;
 }
 
 /* Remove bottom fade gradient bar that creates an ugly dark shadow on the wallpaper */
