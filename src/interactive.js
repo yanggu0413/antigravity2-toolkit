@@ -12,6 +12,10 @@ const devModeManager = require('./devModeManager');
 const localizationManager = require('./localizationManager');
 const { execSync } = require('child_process');
 
+function getWidgetShortcutKey() {
+  return process.platform === 'darwin' ? '⌘+Shift+W' : 'Ctrl+Shift+W';
+}
+
 function printBanner() {
   console.clear();
   console.log(pc.cyan('  ┌─────────────────────────────────────────────────────────────┐'));
@@ -28,27 +32,29 @@ function printStatusDashboard() {
 
   let modeBadge = pc.green('[官方原版] (安全未修改)');
   if (status.mode === 'folder') {
-    modeBadge = pc.magenta(pc.bold('[Folder 開發模式] (即時生效)'));
-  } else if (status.isPatched || status.isLocalizationPatched) {
-    modeBadge = pc.cyan(pc.bold('[ASAR 已修補] (功能已啟用)'));
+    modeBadge = pc.yellow(pc.bold('[開發模式] (resources/app 資料夾運行中)'));
+  } else if (status.mode === 'patched') {
+    modeBadge = pc.cyan(pc.bold('[ASAR 已修補] (自訂增強運作中)'));
   }
 
   const runningText = running.length > 0
-    ? pc.yellow(`[運行中] (${running.length} 個進程)`)
-    : pc.gray('[已停止]');
+    ? pc.yellow(`運行中 (${running.length} 個程序)`)
+    : pc.gray('未運行');
 
   const backupText = status.backupExists
     ? pc.green('[已備份] (app.asar.bak)')
     : pc.gray('[未備份]');
 
-  const wpStatusText = wpConfig.enabled
-    ? pc.green(pc.bold('[已啟用]'))
-    : pc.gray('[未啟用] (官方原生純色)');
+  let locStatusText = pc.gray('官方預設 (英文)');
+  if (locConfig.enabled && locConfig.locale) {
+    const locName = locConfig.locale === 'zh-TW' ? '繁體中文 (zh-TW)' : '簡體中文 (zh-CN)';
+    locStatusText = pc.green(`已啟用 ${locName}`);
+  }
 
-  let locStatusText = pc.gray('[未安裝] (官方英文)');
-  if (status.isLocalizationPatched || locConfig.enabled) {
-    const localeName = (status.activeLocale === 'zh-TW' || locConfig.locale === 'zh-TW') ? '繁體中文 (zh-TW)' : '簡體中文 (zh-CN)';
-    locStatusText = pc.green(pc.bold(`[已安裝] ${localeName}`));
+  let wpStatusText = pc.gray('官方原生 (純色外觀)');
+  if (wpConfig.active) {
+    const baseName = wpConfig.imagePath ? path.basename(wpConfig.imagePath) : '無';
+    wpStatusText = pc.green(`已啟用 (${baseName}) [透明度: ${Math.round(wpConfig.opacity * 100)}%]`);
   }
 
   const brandModeText = locConfig.brandTitle === 'hidden'
@@ -59,7 +65,7 @@ function printStatusDashboard() {
 
   const widgetConfig = configManager.getFloatingWidgetConfig();
   const widgetStatusText = widgetConfig.enabled !== false
-    ? pc.green(pc.bold('[已啟用] (右下角, Ctrl+Shift+W)'))
+    ? pc.green(pc.bold(`[已啟用] (右下角, ${getWidgetShortcutKey()})`))
     : pc.gray('[已停用]');
 
   console.log(pc.bold('\n  【系統即時狀態】'));
@@ -396,7 +402,7 @@ async function handleFullSetupWizard() {
     name: 'enableWidget',
     message: '【步驟 4/4】是否啟用桌面即時懸浮窗？',
     choices: [
-      { title: '啟用桌面即時懸浮窗 [推薦] (螢幕右下角，即時監控 Agent 進度/檔案/指令，按 Ctrl+Shift+W 開關)', value: true },
+      { title: `啟用桌面即時懸浮窗 [推薦] (螢幕右下角，即時監控 Agent 進度/檔案/指令，按 ${getWidgetShortcutKey()} 開關)`, value: true },
       { title: '暫不啟用懸浮窗', value: false },
     ],
     initial: currentWidget.enabled !== false ? 0 : 1,
@@ -415,7 +421,7 @@ async function handleFullSetupWizard() {
   } else {
     console.log(`  │  - 背景桌布:    官方原生純色外觀`);
   }
-  console.log(`  │  - 桌面懸浮窗:  ${enableFloatingWidget ? '啟用 (螢幕右下角, 快捷鍵 Ctrl+Shift+W)' : '停用'}`);
+  console.log(`  │  - 桌面懸浮窗:  ${enableFloatingWidget ? `啟用 (螢幕右下角, 快捷鍵 ${getWidgetShortcutKey()})` : '停用'}`);
   console.log(pc.bold('  └────────────────────────────────────────────────────────────┘\n'));
 
   const confirmPrompt = await prompts({
@@ -487,7 +493,7 @@ async function handleFullSetupWizard() {
       const pid = processManager.launchApp();
       console.log(pc.green(`\n  [成功] Antigravity 已成功啟動！(PID: ${pid})`));
       if (enableFloatingWidget) {
-        console.log(pc.cyan('  [提示] 桌面即時懸浮窗已在螢幕右下角啟動 (快捷鍵 Ctrl+Shift+W)。'));
+        console.log(pc.cyan(`  [提示] 桌面即時懸浮窗已在螢幕右下角啟動 (快捷鍵 ${getWidgetShortcutKey()})。`));
       }
     }
   } catch (err) {

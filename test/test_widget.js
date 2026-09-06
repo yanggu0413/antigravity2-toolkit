@@ -40,22 +40,22 @@ async function runWidgetTests() {
     // 2. Default Positioning Calculation
     const fullHdArea = { x: 0, y: 0, width: 1920, height: 1080 };
     const posExpanded = floatingWidgetManager.calculateDefaultPosition(fullHdArea, false);
-    assert.strictEqual(posExpanded.width, 400);
-    assert.strictEqual(posExpanded.height, 300);
-    assert.strictEqual(posExpanded.x, 1920 - 400 - 20); // 1500
-    assert.strictEqual(posExpanded.y, 1080 - 300 - 20); // 760
+    assert.strictEqual(posExpanded.width, 420);
+    assert.strictEqual(posExpanded.height, 480);
+    assert.strictEqual(posExpanded.x, 1920 - 420 - 20); // 1480
+    assert.strictEqual(posExpanded.y, 1080 - 480 - 20); // 580
 
     const posCollapsed = floatingWidgetManager.calculateDefaultPosition(fullHdArea, true);
-    assert.strictEqual(posCollapsed.width, 400);
+    assert.strictEqual(posCollapsed.width, 420);
     assert.strictEqual(posCollapsed.height, 42);
-    assert.strictEqual(posCollapsed.x, 1500);
+    assert.strictEqual(posCollapsed.x, 1480);
     assert.strictEqual(posCollapsed.y, 1080 - 42 - 20); // 1018
 
     // Multi-monitor offset
     const secondaryArea = { x: 1920, y: 100, width: 2560, height: 1440 };
     const posSecondary = floatingWidgetManager.calculateDefaultPosition(secondaryArea, false);
-    assert.strictEqual(posSecondary.x, 1920 + 2560 - 400 - 20);
-    assert.strictEqual(posSecondary.y, 100 + 1440 - 300 - 20);
+    assert.strictEqual(posSecondary.x, 1920 + 2560 - 420 - 20);
+    assert.strictEqual(posSecondary.y, 100 + 1440 - 480 - 20);
     console.log('  ✔ Default corner positioning and multi-monitor coordinates computed accurately');
 
     // 3. Agent Status & DOM Scraping Parsers
@@ -128,16 +128,25 @@ async function runWidgetTests() {
     assert.strictEqual(statusCompleted.status, 'completed');
     assert.strictEqual(statusCompleted.statusText, '任務已完成');
 
-    // Verify settings modal exclusion in observer code
+    // Verify inline ask card detection and settings modal exclusion
     const observerScript = agentStatusObserver.getObserverScript();
     assert.ok(observerScript.includes('設定|Settings|Preferences'), 'Observer script must exclude settings modal');
+    assert.ok(observerScript.includes('Submit|送出|提交|確認送出|確定'), 'Observer script must detect Submit button');
+    assert.ok(observerScript.includes('Waiting for user input'), 'Observer script must detect Waiting for user input');
+    assert.ok(observerScript.includes('__agSubmitButton'), 'Observer script must cache submit button');
     assert.ok(!observerScript.includes('button:has(svg rect)'), 'Observer script must not match all SVG rect buttons');
     assert.ok(!observerScript.includes('button:has(rect)'), 'Observer script must not match all rect buttons');
 
     const scraperExpr = agentStatusObserver.getScraperExpression();
     assert.ok(scraperExpr.includes('設定|Settings|Preferences'), 'Scraper expression must exclude settings modal');
+    assert.ok(scraperExpr.includes('Submit|送出|提交|確認送出|確定'), 'Scraper expression must detect Submit button');
+    assert.ok(scraperExpr.includes('Waiting for user input'), 'Scraper expression must detect Waiting for user input');
     assert.ok(!scraperExpr.includes('button:has(svg rect)'), 'Scraper expression must not match all SVG rect buttons');
     assert.ok(!scraperExpr.includes('button:has(rect)'), 'Scraper expression must not match all rect buttons');
+
+    const clickExpr = agentStatusObserver.getOptionClickExpression(1);
+    assert.ok(clickExpr.includes('__agOptionButtons'), 'Option click expression must use cached option buttons');
+    assert.ok(clickExpr.includes('__agSubmitButton'), 'Option click expression must trigger submit button');
     console.log('  ✔ Agent step parser, diff metrics (+add -del), completed state, and accurate stop detection validated');
 
     // 4. Mock Electron Window Lifecycle & IPC
@@ -239,7 +248,7 @@ async function runWidgetTests() {
     assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
     ipcHandlers['ag-widget-toggle-collapse']({}, false);
-    assert.strictEqual(win.getBounds().height, 300, 'Height must expand to 300px');
+    assert.strictEqual(win.getBounds().height, 480, 'Height must expand to 480px');
     assert.strictEqual(configManager.getFloatingWidgetConfig().collapsed, false);
     assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 

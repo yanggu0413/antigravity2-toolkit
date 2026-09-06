@@ -34,8 +34,14 @@ async function runLoaderTests() {
       assert.strictEqual(optsMica.backgroundColor, '#00000000');
       assert.strictEqual(optsMica.titleBarOverlay.color, '#00000000');
       assert.strictEqual(optsMica.titleBarOverlay.symbolColor, '#FAFAFA');
+    } else if (process.platform === 'darwin') {
+      assert.strictEqual(optsMica.vibrancy, 'under-window');
+      assert.strictEqual(optsMica.visualEffectState, 'active');
+      assert.strictEqual(optsMica.backgroundColor, '#00000000');
+    } else if (process.platform === 'linux') {
+      assert.strictEqual(optsMica.backgroundColor, '#131313');
     }
-    console.log('  ✔ getBrowserWindowOptions computes native Mica/Acrylic options correctly');
+    console.log('  ✔ getBrowserWindowOptions computes native Mica/Acrylic/Vibrancy options correctly');
 
     configManager.saveConfig({
       backgroundMaterial: 'acrylic',
@@ -45,8 +51,10 @@ async function runLoaderTests() {
     assert.strictEqual(optsAcrylic.enableDevTools, false);
     if (process.platform === 'win32') {
       assert.strictEqual(optsAcrylic.backgroundMaterial, 'acrylic');
+    } else if (process.platform === 'darwin') {
+      assert.strictEqual(optsAcrylic.vibrancy, 'under-window');
     }
-    console.log('  ✔ getBrowserWindowOptions toggles Acrylic material and DevTools config');
+    console.log('  ✔ getBrowserWindowOptions toggles Acrylic/Vibrancy material and DevTools config');
 
     configManager.saveConfig({
       backgroundMaterial: 'none',
@@ -57,6 +65,9 @@ async function runLoaderTests() {
       assert.strictEqual(optsNoneLight.backgroundColor, '#FAFAFA');
       assert.strictEqual(optsNoneLight.titleBarOverlay.color, '#FAFAFA');
       assert.strictEqual(optsNoneLight.titleBarOverlay.symbolColor, '#383A42');
+    } else {
+      assert.strictEqual(optsNoneLight.backgroundColor, '#FAFAFA');
+      assert.strictEqual(optsNoneLight.vibrancy, undefined);
     }
     console.log('  ✔ getBrowserWindowOptions computes non-mica Light mode titleBarOverlay correctly');
 

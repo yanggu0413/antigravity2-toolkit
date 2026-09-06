@@ -38,12 +38,48 @@ function getRunningProcesses() {
 
   if (isMac || isLinux) {
     try {
-      const stdout = execSync('pgrep -f -i antigravity', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-      const pids = stdout.trim().split(/\s+/).filter(Boolean);
-      return pids.map((pid) => ({
-        name: 'antigravity',
-        pid: parseInt(pid, 10),
-      }));
+      const myPid = process.pid;
+      const myPpid = process.ppid;
+      const running = [];
+      const seenPids = new Set([myPid, myPpid]);
+
+      try {
+        const stdout = execSync('pgrep -i antigravity || pgrep -f "Antigravity.app|antigravity" || true', {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        const pids = stdout.trim().split(/\s+/).filter(Boolean);
+        for (const pidStr of pids) {
+          const pid = parseInt(pidStr, 10);
+          if (pid && !seenPids.has(pid)) {
+            try {
+              const cmd = execSync(`ps -p ${pid} -o command=`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+              if (cmd.includes('antigravity2-toolkit') || cmd.includes('ag-toolkit') || cmd.includes('test_runner')) {
+                continue;
+              }
+            } catch (_) {}
+            seenPids.add(pid);
+            running.push({ name: 'antigravity', pid });
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const stdout = execSync('pgrep -i language_server || true', {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        const pids = stdout.trim().split(/\s+/).filter(Boolean);
+        for (const pidStr of pids) {
+          const pid = parseInt(pidStr, 10);
+          if (pid && !seenPids.has(pid)) {
+            seenPids.add(pid);
+            running.push({ name: 'language_server', pid });
+          }
+        }
+      } catch (_) {}
+
+      return running;
     } catch (_) {
       return [];
     }
@@ -85,11 +121,17 @@ function killProcesses(timeoutMs = 3000) {
       execSync('taskkill /F /IM language_server.exe /T', { stdio: 'ignore' });
     } catch (_) {}
   } else {
+    const procs = getRunningProcesses();
+    for (const proc of procs) {
+      try {
+        process.kill(proc.pid, 'SIGTERM');
+      } catch (_) {}
+    }
     try {
-      execSync('pkill -f -i antigravity >/dev/null 2>&1 || true', { stdio: 'ignore' });
+      execSync('pkill -x antigravity || pkill -x Antigravity || true', { stdio: 'ignore' });
     } catch (_) {}
     try {
-      execSync('pkill -f -i language_server >/dev/null 2>&1 || true', { stdio: 'ignore' });
+      execSync('pkill -x language_server || true', { stdio: 'ignore' });
     } catch (_) {}
   }
 
@@ -110,12 +152,14 @@ function launchApp(manualDir = null) {
 
   if (isMac) {
     const installDir = paths.detectInstallationDir(manualDir);
-    const child = spawn('open', [installDir], {
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
-    return child.pid || 0;
+    if (installDir && installDir.endsWith('.app')) {
+      const child = spawn('open', ['-a', installDir], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+      return child.pid || 0;
+    }
   }
 
   if (!fs.existsSync(exePath)) {

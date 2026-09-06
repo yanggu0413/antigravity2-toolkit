@@ -5,6 +5,7 @@ const { runDevModeTests } = require('./test_dev_mode');
 const { runLoaderTests } = require('./test_loader');
 const { runLocalizationTests } = require('./test_localization');
 const { runWidgetTests } = require('./test_widget');
+const { runTests: runCrossPlatformTests } = require('./test_cross_platform');
 
 async function main() {
   console.log('====================================================');
@@ -23,6 +24,7 @@ async function main() {
     { name: 'Folder Dev Mode Lifecycle & Status', fn: async () => runDevModeTests() },
     { name: 'Chinese Localization & Integrated Capabilities', fn: async () => runLocalizationTests() },
     { name: 'Desktop Floating Widget & Live IPC', fn: async () => runWidgetTests() },
+    { name: 'Cross-Platform Compatibility (Win/macOS/Linux)', fn: async () => runCrossPlatformTests() },
   ];
 
   for (const suite of suites) {

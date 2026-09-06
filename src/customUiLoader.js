@@ -93,6 +93,8 @@ function readThemeCss() {
 function getBrowserWindowOptions(isLight, foregroundColor) {
   const config = readConfig();
   const isWindows = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+  const isLinux = process.platform === 'linux';
   const symbolColor = foregroundColor || (isLight ? '#383A42' : '#FAFAFA');
 
   const options = {
@@ -117,6 +119,22 @@ function getBrowserWindowOptions(isLight, foregroundColor) {
         symbolColor: symbolColor,
         height: 30,
       };
+    }
+  } else if (isMac) {
+    const isVibrant = (material === 'mica' || material === 'acrylic' || Boolean(config.macosVibrancy)) && config.macosVibrancy !== 'none';
+    if (isVibrant) {
+      options.vibrancy = config.macosVibrancy || 'under-window';
+      options.visualEffectState = 'active';
+      options.backgroundColor = '#00000000';
+    } else {
+      options.backgroundColor = isLight ? '#FAFAFA' : '#131313';
+    }
+  } else if (isLinux) {
+    if (config.linuxTransparentWindow === true) {
+      options.transparent = true;
+      options.backgroundColor = '#00000000';
+    } else {
+      options.backgroundColor = isLight ? '#FAFAFA' : '#131313';
     }
   } else {
     // Non-Windows default
@@ -244,12 +262,21 @@ function attachCustomUi(win) {
    * Updates native window material live if supported.
    */
   function updateWindowMaterial() {
-    if (!win || win.isDestroyed() || process.platform !== 'win32') return;
+    if (!win || win.isDestroyed()) return;
     try {
       const cfg = readConfig();
       const mat = (cfg.backgroundMaterial || 'mica').toLowerCase();
-      if (typeof win.setBackgroundMaterial === 'function') {
-        win.setBackgroundMaterial(mat === 'mica' || mat === 'acrylic' ? mat : 'none');
+
+      if (process.platform === 'win32') {
+        if (typeof win.setBackgroundMaterial === 'function') {
+          win.setBackgroundMaterial(mat === 'mica' || mat === 'acrylic' ? mat : 'none');
+        }
+      } else if (process.platform === 'darwin') {
+        if (typeof win.setVibrancy === 'function') {
+          const isVibrant = (mat === 'mica' || mat === 'acrylic' || Boolean(cfg.macosVibrancy)) && cfg.macosVibrancy !== 'none';
+          const vibType = isVibrant ? (cfg.macosVibrancy || 'under-window') : null;
+          win.setVibrancy(vibType);
+        }
       }
     } catch (_) {}
   }

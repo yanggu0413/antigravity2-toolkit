@@ -12,7 +12,7 @@
 - **右側代碼編輯器 100% 純色不穿透**：代碼編輯區與 Diff 視窗保持純色不透明，代碼清晰易讀，背景絕不干擾閱讀。
 - **頂部對話框與對話泡泡完美貼合**：Prompt 輸入與對話泡泡尺寸隨內容貼合，兼具毛玻璃質感與清爽外觀。
 - **⚡ 零重啟 Hot-Reload**：修改圖片、透明度或模糊度即時在運行中的 Antigravity 視窗生效。
-- **支援 Windows 11 原生 Mica / Acrylic 特效**：真正調用 Electron 原生背景材質。
+- **支援 Windows 11 原生 Mica / Acrylic 與 macOS 原生 Vibrancy（毛玻璃）特效**：調用系統原生材質渲染。
 
 ### 2. 🌐 深度中文在地化 (Chinese Localization)
 - **繁體中文 (`zh-TW`) 與簡體中文 (`zh-CN`) 完整支援**：字典收錄逾 1,100+ 條精校專業術語。
@@ -25,7 +25,7 @@
 - **靈活品牌名設定**：可選擇保留原生英文 `Antigravity`、隱藏品牌名或在地化顯示。
 
 ### 3. 📌 桌面即時狀態懸浮窗 (Desktop Floating Widget)
-- **Windows 11 Fluent Acrylic 亞克力設計**：自適應系統深色/淺色主題，14px 圓角與細緻陰影，完美融合現代作業系統。
+- **Windows 11 Fluent Acrylic 亞克力設計與 macOS Spaces 漫遊**：自適應系統深色/淺色主題，14px 圓角與細緻陰影，跨平台自然融合。
 - **100% 向量 SVG 圖示 (Strictly Zero Emoji)**：全面採用高品質向量圖式庫，排版緊湊精緻。
 - **即時雙向狀態監控**：
   - **狀態呼吸燈**：顯示待命中、思考時間（Thought for Xs）、工具執行中。
@@ -37,13 +37,14 @@
 - **拖曳記憶與微型膠囊**：
   - 預設停靠於螢幕右下角，支援滑鼠任意拖曳並自動記憶關機座標。
   - 支援一鍵折疊為迷你膠囊狀態（高僅 38px）。
-  - 內建快捷鍵 `Ctrl+Shift+W` 快速顯示 / 隱藏。
+  - 內建跨平台快捷鍵 (Windows/Linux: `Ctrl+Shift+W`, macOS: `⌘+Shift+W`) 快速顯示 / 隱藏。
 
 ### 4. 🛡️ 安全無損與開發者友好
 - **單次打包雙重注入**：桌布增強與中文化可在單次 ASAR 解包/重包中完成，零多餘解包開銷。
 - **🛠️ Folder 開發模式 (`resources/app/`)**：支援免重新打包直接修改代碼與字典，修改即時生效。
 - **🔄 一鍵無損還原**：自動備份 `app.asar.bak` 與 `app.asar.unpacked.bak`，隨時可完全恢復為官方原廠乾淨狀態。
-- **macOS 自動重簽名**：內建 Ad-hoc 深度代碼重簽名，徹底杜絕損壞無法開啟問題。
+- **macOS 自動重簽名與隔離修復**：內建 Ad-hoc 深度重簽名與 Gatekeeper 隔離清理 (`xattr -dr com.apple.quarantine`)，徹底杜絕損壞無法開啟問題。
+- **Linux 權限保護與 Sudo 家目錄防護**：智慧偵測提權需求，並透過 `SUDO_USER` 自動鎖定使用者真實配置目錄。
 - **完整向下相容**：同時相容 `ag-themer` 與 `localization_engine.js` 舊版呼叫語法。
 
 ---
@@ -54,7 +55,9 @@
 
 在專案目錄中：
 - **開啟全功能視覺化互動選單**：
-  - Windows: 根目錄直接雙擊 **`啟動工具箱.bat`**
+  - **Windows**: 根目錄直接雙擊 **`啟動工具箱.bat`**
+  - **macOS**: 根目錄直接雙擊 **`啟動工具箱.command`**（或終端執行 `./啟動工具箱.sh`）
+  - **Linux**: 終端執行 **`./啟動工具箱.sh`**（若修改 `/opt` 目錄權限不足可使用 `sudo ./啟動工具箱.sh`）
 - **快捷單項安裝腳本（位於 `scripts/` 目錄）**：
   - 一鍵安裝繁體中文：Windows 執行 `scripts/install_tw.bat`；macOS/Linux 執行 `./scripts/install_tw.sh`
   - 一鍵安裝簡體中文：Windows 執行 `scripts/install_cn.bat`；macOS/Linux 執行 `./scripts/install_cn.sh`

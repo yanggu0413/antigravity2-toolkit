@@ -12,6 +12,20 @@ const child_process = require('child_process');
 
 let cachedInstallDir = null;
 
+function getRealUserHome() {
+  const sudoUser = process.env.SUDO_USER;
+  if (sudoUser && process.platform !== 'win32') {
+    if (process.platform === 'darwin') {
+      const macHome = path.join('/Users', sudoUser);
+      if (fs.existsSync(macHome)) return macHome;
+    } else {
+      const linuxHome = path.join('/home', sudoUser);
+      if (fs.existsSync(linuxHome)) return linuxHome;
+    }
+  }
+  return os.homedir();
+}
+
 function hasAntigravityResources(candidate) {
   if (!candidate) return false;
   return (
@@ -24,6 +38,10 @@ function hasAntigravityResources(candidate) {
   );
 }
 
+function clearInstallDirCache() {
+  cachedInstallDir = null;
+}
+
 function detectInstallationDir(manualDir = null) {
   if (manualDir) {
     let resolved = path.resolve(manualDir);
@@ -32,8 +50,8 @@ function detectInstallationDir(manualDir = null) {
       if (stat.isFile() && resolved.endsWith('app.asar')) {
         resolved = path.dirname(resolved);
       }
-      return resolved;
     }
+    return resolved;
   }
 
   if (cachedInstallDir && fs.existsSync(cachedInstallDir)) {
@@ -104,8 +122,12 @@ function detectInstallationDir(manualDir = null) {
       addCandidate(`${drive}:\\Program Files (x86)\\Antigravity`);
     }
   } else if (isMac) {
+    const userHome = getRealUserHome();
     addCandidate('/Applications/Antigravity.app');
-    addCandidate(path.join(os.homedir(), 'Applications', 'Antigravity.app'));
+    addCandidate('/Applications/antigravity.app');
+    addCandidate('/Applications/Antigravity 2.app');
+    addCandidate(path.join(userHome, 'Applications', 'Antigravity.app'));
+    addCandidate(path.join(userHome, 'Applications', 'antigravity.app'));
   } else if (isLinux) {
     addCandidate('/opt/Antigravity');
     addCandidate('/opt/antigravity');
@@ -116,7 +138,7 @@ function detectInstallationDir(manualDir = null) {
     addCandidate('/usr/local/lib/antigravity');
     addCandidate('/usr/local/share/antigravity');
 
-    const homeDir = os.homedir();
+    const homeDir = getRealUserHome();
     addCandidate(path.join(homeDir, '.local', 'share', 'antigravity'));
     addCandidate(path.join(homeDir, '.local', 'share', 'Antigravity'));
     addCandidate(path.join(homeDir, '.local', 'lib', 'antigravity'));
@@ -210,15 +232,22 @@ function getExePath(manualDir = null) {
   }
 
   if (process.platform === 'darwin') {
-    const macExe = path.join(installDir, 'Contents', 'MacOS', 'Antigravity');
-    if (fs.existsSync(macExe)) return macExe;
-    return installDir;
+    const macCandidates = [
+      path.join(installDir, 'Contents', 'MacOS', 'Antigravity'),
+      path.join(installDir, 'Contents', 'MacOS', 'antigravity'),
+      path.join(installDir, 'Contents', 'MacOS', 'Electron'),
+    ];
+    for (const c of macCandidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return macCandidates[0] || installDir;
   }
 
   const linuxCandidates = [
     path.join(installDir, 'antigravity'),
     path.join(installDir, 'Antigravity'),
     '/usr/bin/antigravity',
+    '/usr/local/bin/antigravity',
   ];
   for (const c of linuxCandidates) {
     if (fs.existsSync(c)) return c;
@@ -254,7 +283,7 @@ function getCustomUiDir() {
   if (process.env.ANTIGRAVITY_CUSTOM_UI_DIR) {
     return path.resolve(process.env.ANTIGRAVITY_CUSTOM_UI_DIR);
   }
-  return path.join(os.homedir(), '.gemini', 'antigravity', 'custom-ui');
+  return path.join(getRealUserHome(), '.gemini', 'antigravity', 'custom-ui');
 }
 
 function getConfigPath() {
@@ -301,7 +330,55 @@ function checkInstallation(manualDir = null) {
   };
 }
 
+/**
+ * Checks write access to resources directory and asar file,
+ * returning diagnosis and elevation advice for macOS / Linux.
+ */
+function checkWritePermissions(manualDir = null) {
+  const installDir = detectInstallationDir(manualDir);
+  const resourcesDir = getResourcesDir(manualDir);
+  const asarPath = getAsarPath(manualDir);
+
+  const targetDir = fs.existsSync(resourcesDir) ? resourcesDir : (fs.existsSync(installDir) ? installDir : path.dirname(resourcesDir));
+
+  let resourcesWritable = false;
+  let asarWritable = true;
+
+  try {
+    if (fs.existsSync(targetDir)) {
+      fs.accessSync(targetDir, fs.constants.W_OK | fs.constants.R_OK);
+      resourcesWritable = true;
+    }
+  } catch (_) {
+    resourcesWritable = false;
+  }
+
+  try {
+    if (fs.existsSync(asarPath)) {
+      fs.accessSync(asarPath, fs.constants.W_OK | fs.constants.R_OK);
+      asarWritable = true;
+    }
+  } catch (_) {
+    asarWritable = false;
+  }
+
+  const writable = resourcesWritable && asarWritable;
+  const isUnix = process.platform === 'darwin' || process.platform === 'linux';
+  const needsElevation = !writable && isUnix;
+
+  return {
+    writable,
+    resourcesWritable,
+    asarWritable,
+    needsElevation,
+    hint: needsElevation
+      ? `權限不足：無法寫入 ${targetDir}。請使用 'sudo' 重新執行此指令（例如：sudo ./啟動工具箱.sh 或 sudo ag-toolkit ...）。`
+      : null,
+  };
+}
+
 module.exports = {
+  getRealUserHome,
   detectInstallationDir,
   getResourcesDir,
   getExePath,
@@ -317,4 +394,6 @@ module.exports = {
   getThemesDir,
   getAssetsDir,
   checkInstallation,
+  checkWritePermissions,
+  clearInstallDirCache,
 };

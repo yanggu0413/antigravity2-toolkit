@@ -961,6 +961,13 @@ function resignAppOnMac(anyPath) {
 
   if (targetApp && fs.existsSync(targetApp)) {
     try {
+      // Clear macOS Gatekeeper quarantine attribute to prevent "App damaged" warnings
+      try {
+        child_process.execSync(`xattr -dr com.apple.quarantine "${targetApp}"`, {
+          stdio: 'ignore',
+        });
+      } catch (_) {}
+
       const out = child_process.execSync(`codesign --force --deep --sign - "${targetApp}"`, {
         encoding: 'utf8',
         stdio: 'pipe',

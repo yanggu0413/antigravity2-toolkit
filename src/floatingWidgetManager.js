@@ -114,8 +114,8 @@ function resolveWidgetHtmlPath() {
  */
 function calculateDefaultPosition(workArea, isCollapsed = false, customSize = null) {
   const area = workArea || { x: 0, y: 0, width: 1920, height: 1080 };
-  const width = (customSize && typeof customSize.width === 'number') ? customSize.width : 400;
-  const height = isCollapsed ? 42 : ((customSize && typeof customSize.height === 'number') ? customSize.height : 300);
+  const width = (customSize && typeof customSize.width === 'number') ? customSize.width : 420;
+  const height = isCollapsed ? 42 : ((customSize && typeof customSize.height === 'number') ? customSize.height : 480);
   const margin = 20;
 
   const x = Math.round(area.x + area.width - width - margin);
@@ -154,11 +154,13 @@ function enforceAlwaysOnTop() {
 
   try {
     if (typeof widgetWindow.setAlwaysOnTop === 'function') {
+      const isMac = process.platform === 'darwin';
+      const level = isMac ? 'floating' : 'screen-saver';
       try {
-        widgetWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+        widgetWindow.setAlwaysOnTop(true, level, 1);
       } catch (_) {
         try {
-          widgetWindow.setAlwaysOnTop(true, 'screen-saver');
+          widgetWindow.setAlwaysOnTop(true, level);
         } catch (_) {
           widgetWindow.setAlwaysOnTop(true);
         }
@@ -371,7 +373,7 @@ function setupIpcHandlers(electron) {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       const bounds = widgetWindow.getBounds();
       const config = getFloatingWidgetConfig();
-      const normalHeight = (config.size && typeof config.size.height === 'number') ? config.size.height : 300;
+      const normalHeight = (config.size && typeof config.size.height === 'number') ? config.size.height : 480;
       const targetHeight = isCollapsedState ? 42 : normalHeight;
       widgetWindow.setBounds({
         x: bounds.x,

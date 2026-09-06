@@ -25,7 +25,7 @@ const DEFAULT_CONFIG = {
     collapsed: false,
     alwaysOnTop: true,
     position: { x: null, y: null },
-    size: { width: 400, height: 300 },
+    size: { width: 420, height: 480 },
   },
 };
 

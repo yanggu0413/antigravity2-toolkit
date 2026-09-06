@@ -237,6 +237,9 @@ function registerKeybindings(win, actions) {
     // Clean mock directories
     fs.rmSync(mockAppDir, { recursive: true, force: true });
   } finally {
+    delete process.env.ANTIGRAVITY_RESOURCES_DIR;
+    delete process.env.ANTIGRAVITY_CUSTOM_UI_DIR;
+    delete process.env.ANTIGRAVITY_TEST_MODE;
     fs.rmSync(sandboxResources, { recursive: true, force: true });
     fs.rmSync(sandboxCustomUi, { recursive: true, force: true });
   }

@@ -38,6 +38,9 @@ const WINCONFIG_INJECTION = `        /* === AG-THEMER-WINCONFIG-START === */
             }),
         backgroundColor: agOpts?.backgroundColor ?? backgroundColor,
         ...(agOpts?.backgroundMaterial ? { backgroundMaterial: agOpts.backgroundMaterial } : {}),
+        ...(agOpts?.vibrancy ? { vibrancy: agOpts.vibrancy } : {}),
+        ...(agOpts?.visualEffectState ? { visualEffectState: agOpts.visualEffectState } : {}),
+        ...(agOpts?.transparent !== undefined ? { transparent: agOpts.transparent } : {}),
         /* === AG-THEMER-WINCONFIG-END === */`;
 
 const DEVTOOLS_INJECTION = `            /* === AG-THEMER-DEVTOOLS-START === */
@@ -324,6 +327,13 @@ function unpatchDirectory(unpackedDir, options = {}) {
  */
 async function patchAsar(options = {}) {
   const manualDir = options.manualDir || null;
+
+  // Permission check on Unix
+  const perm = paths.checkWritePermissions(manualDir);
+  if (!perm.writable && perm.needsElevation) {
+    throw new Error(perm.hint);
+  }
+
   const asarPath = paths.getAsarPath(manualDir);
   const backupPath = paths.getAsarBackupPath(manualDir);
 

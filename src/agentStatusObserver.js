@@ -235,69 +235,246 @@ function getObserverScript() {
       // 1. Detect Ask Question or Proceed modal / card
       var askInfo = null;
       var optionButtons = [];
-      var dialogs = document.querySelectorAll('[role="dialog"], [class*="dialog"], [class*="modal"]');
+      var submitButtonEl = null;
       var askFound = false;
 
-      // Check dialog elements
-      for (var d = 0; d < dialogs.length; d++) {
-        var dlg = dialogs[d];
-        var dlgText = dlg.innerText || '';
-
-        // 1. Explicit Exclusions: Ignore Settings, Preferences, Feedback, About, Menubars
-        var dlgAttr = (dlg.className || '') + ' ' + (dlg.getAttribute('aria-label') || '') + ' ' + (dlg.id || '');
-        if (/settings|preferences|feedback|about|menubar|context-menu/i.test(dlgAttr)) {
-          continue;
-        }
-        var lines = dlgText.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
-        var qTitle = lines[0] || '';
-        if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(qTitle)) {
-          continue;
-        }
-        if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
-          continue;
-        }
-        if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
-          continue;
-        }
-
-        // 2. Inclusion Requirements: An Agent question/decision modal MUST have Submit/Skip buttons or option inputs
-        var hasSubmitOrSkip = false;
-        var allDlgBtns = dlg.querySelectorAll('button');
-        for (var sbIdx = 0; sbIdx < allDlgBtns.length; sbIdx++) {
-          var sbText = (allDlgBtns[sbIdx].innerText || '').trim();
-          if (/^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(sbText)) {
-            hasSubmitOrSkip = true;
+      function extractCardData(cardEl, submitBtn) {
+        var lines = (cardEl.innerText || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+        var qTitle = '';
+        for (var l = 0; l < lines.length; l++) {
+          var ln = lines[l];
+          if (/^(Asking \d+ question|Waiting for user input\.\.\.|Waiting for user input|跳過|Skip|提交|Submit)$/i.test(ln)) {
+            continue;
+          }
+          if (!qTitle) qTitle = ln;
+          if (ln.indexOf('？') !== -1 || ln.indexOf('?') !== -1) {
+            qTitle = ln;
             break;
           }
         }
-        var optionInputs = dlg.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="option"], [data-option]');
 
-        // If neither Submit/Skip nor option inputs are present, this is a standard menu or UI modal, NOT an agent question
-        if (!hasSubmitOrSkip && optionInputs.length === 0) {
-          continue;
-        }
-
-        // 3. Collect choices
         var opts = [];
         var btnList = [];
-        for (var b = 0; b < allDlgBtns.length; b++) {
-          var bt = allDlgBtns[b].innerText.trim();
-          if (bt && !/^(關閉|Close|X|Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(bt)) {
-            if (!/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
-              opts.push(bt);
-              btnList.push(allDlgBtns[b]);
+
+        var allCardBtns = cardEl.querySelectorAll('button, [role="button"]');
+        for (var b = 0; b < allCardBtns.length; b++) {
+          var btn = allCardBtns[b];
+          var bt = (btn.innerText || btn.textContent || '').trim();
+          if (!bt || /^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過|關閉|Close|X)$/i.test(bt)) {
+            continue;
+          }
+          if (/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
+            continue;
+          }
+          var cleanText = bt.replace(/^\s*\d+[\s\.\:\、\)]*/, '').trim() || bt;
+          if (opts.indexOf(cleanText) === -1) {
+            opts.push(cleanText);
+            btnList.push(btn);
+          }
+        }
+
+        if (opts.length === 0) {
+          var radioEls = cardEl.querySelectorAll('[role="radio"], [role="checkbox"], [role="option"], label');
+          for (var r = 0; r < radioEls.length; r++) {
+            var rel = radioEls[r];
+            var rt = (rel.innerText || rel.textContent || '').trim();
+            if (!rt || /^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(rt)) continue;
+            var cleanRt = rt.replace(/^\s*\d+[\s\.\:\、\)]*/, '').trim() || rt;
+            if (opts.indexOf(cleanRt) === -1) {
+              opts.push(cleanRt);
+              btnList.push(rel);
             }
           }
         }
-        if (opts.length >= 2 || (hasSubmitOrSkip && opts.length >= 1)) {
-          askInfo = { question: qTitle || '需要您的確認或決策', options: opts };
-          optionButtons = btnList;
-          askFound = true;
-          break;
+
+        if (opts.length === 0) {
+          var allDescendants = cardEl.querySelectorAll('div, li, p');
+          for (var d = 0; d < allDescendants.length; d++) {
+            var dEl = allDescendants[d];
+            if (dEl.children.length > 4) continue;
+            var dt = (dEl.innerText || '').trim();
+            var mNum = dt.match(/^(\d+)[\s\.\:\、\)]+(.+)/s);
+            if (mNum && mNum[1] && mNum[2]) {
+              var optText = mNum[2].trim();
+              if (optText && opts.indexOf(optText) === -1) {
+                opts.push(optText);
+                btnList.push(dEl);
+              }
+            } else if (/^\(Recommended\)|^Other\b/i.test(dt) && opts.indexOf(dt) === -1) {
+              opts.push(dt);
+              btnList.push(dEl);
+            }
+          }
+        }
+
+        if (opts.length === 0) {
+          for (var pl = 0; pl < lines.length; pl++) {
+            var lineText = lines[pl];
+            if (/^(Asking|Waiting|跳過|Skip|提交|Submit|Close|關閉)/i.test(lineText)) continue;
+            if (lineText === qTitle) continue;
+            var m = lineText.match(/^(\d+)[\s\.\:\、\)]+(.+)/);
+            if (m && m[2].trim()) {
+              opts.push(m[2].trim());
+            } else if (/^\(Recommended\)|^Other\b/i.test(lineText)) {
+              opts.push(lineText);
+            }
+          }
+        }
+
+        return {
+          question: qTitle || '需要您的確認或決策',
+          options: opts,
+          optionButtons: btnList,
+          submitButton: submitBtn
+        };
+      }
+
+      // 1.1 Strategy A: Find inline question card via action buttons (Submit / 提交 / 送出)
+      var allButtons = document.querySelectorAll('button, [role="button"]');
+      for (var bIdx = 0; bIdx < allButtons.length; bIdx++) {
+        var btn = allButtons[bIdx];
+        var btnText = (btn.innerText || btn.textContent || '').trim();
+        if (/^(Submit|送出|提交|確認送出|確定)$/i.test(btnText) || /^提交\b/i.test(btnText) || /^Submit\b/i.test(btnText)) {
+          var rect = btn.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            var curr = btn.parentElement;
+            var matchedCard = null;
+            for (var depth = 0; depth < 8 && curr && curr !== document.body && curr !== document.documentElement; depth++) {
+              var attr = (curr.className || '') + ' ' + (curr.getAttribute('aria-label') || '') + ' ' + (curr.id || '');
+              if (/settings|preferences|feedback|about|menubar|context-menu/i.test(attr)) {
+                break;
+              }
+              var cText = curr.innerText || '';
+              if (cText.indexOf('應用程式設定') !== -1 || (cText.indexOf('外觀') !== -1 && cText.indexOf('模型') !== -1)) {
+                break;
+              }
+              if (cText.indexOf('？') !== -1 || cText.indexOf('?') !== -1 || /Waiting for user input|Asking \d+ question|Recommended|Other/i.test(cText)) {
+                matchedCard = curr;
+                if (/form|rounded|card|border/i.test(curr.className || '') || cText.indexOf('Waiting for user input') !== -1) {
+                  break;
+                }
+              }
+              curr = curr.parentElement;
+            }
+
+            if (matchedCard) {
+              var cardData = extractCardData(matchedCard, btn);
+              if (cardData.options.length >= 1) {
+                askInfo = {
+                  question: cardData.question,
+                  options: cardData.options
+                };
+                optionButtons = cardData.optionButtons;
+                submitButtonEl = cardData.submitButton;
+                askFound = true;
+                break;
+              }
+            }
+          }
         }
       }
 
-      // If no dialog found, check for Proceed / Approve banner
+      // 1.2 Strategy B: Find via "Waiting for user input" indicator
+      if (!askFound) {
+        var allTextNodes = document.querySelectorAll('div, span, p');
+        for (var tni = 0; tni < allTextNodes.length; tni++) {
+          var tn = allTextNodes[tni];
+          var tnText = (tn.innerText || '').trim();
+          if (tnText === 'Waiting for user input...' || tnText === 'Waiting for user input' || /^Asking \d+ question/i.test(tnText)) {
+            var pNode = tn.parentElement;
+            while (pNode && pNode !== document.body) {
+              var pBtns = pNode.querySelectorAll('button');
+              if (pBtns.length >= 2) {
+                var sBtnMatch = null;
+                for (var pbi = 0; pbi < pBtns.length; pbi++) {
+                  var pbt = (pBtns[pbi].innerText || '').trim();
+                  if (/^(Submit|送出|提交|確認送出|確定)$/i.test(pbt) || /^提交\b/i.test(pbt) || /^Submit\b/i.test(pbt)) {
+                    sBtnMatch = pBtns[pbi];
+                    break;
+                  }
+                }
+                var pData = extractCardData(pNode, sBtnMatch);
+                if (pData.options.length >= 1) {
+                  askInfo = {
+                    question: pData.question,
+                    options: pData.options
+                  };
+                  optionButtons = pData.optionButtons;
+                  submitButtonEl = pData.submitButton;
+                  askFound = true;
+                  break;
+                }
+              }
+              pNode = pNode.parentElement;
+            }
+            if (askFound) break;
+          }
+        }
+      }
+
+      // 1.3 Strategy C: Check dialog elements
+      if (!askFound) {
+        var dialogs = document.querySelectorAll('[role="dialog"], [class*="dialog"], [class*="modal"]');
+        for (var d = 0; d < dialogs.length; d++) {
+          var dlg = dialogs[d];
+          var dlgText = dlg.innerText || '';
+
+          var dlgAttr = (dlg.className || '') + ' ' + (dlg.getAttribute('aria-label') || '') + ' ' + (dlg.id || '');
+          if (/settings|preferences|feedback|about|menubar|context-menu/i.test(dlgAttr)) {
+            continue;
+          }
+          var dLines = dlgText.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+          var dTitle = dLines[0] || '';
+          if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(dTitle)) {
+            continue;
+          }
+          if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
+            continue;
+          }
+          if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
+            continue;
+          }
+
+          var hasSubmitOrSkip = false;
+          var allDlgBtns = dlg.querySelectorAll('button');
+          var dlgSubmitBtn = null;
+          for (var sbIdx = 0; sbIdx < allDlgBtns.length; sbIdx++) {
+            var sbText = (allDlgBtns[sbIdx].innerText || '').trim();
+            if (/^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(sbText)) {
+              hasSubmitOrSkip = true;
+              if (/^(Submit|送出|提交|確認送出|確定)$/i.test(sbText)) {
+                dlgSubmitBtn = allDlgBtns[sbIdx];
+              }
+            }
+          }
+          var optionInputs = dlg.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="option"], [data-option]');
+
+          if (!hasSubmitOrSkip && optionInputs.length === 0) {
+            continue;
+          }
+
+          var opts = [];
+          var btnList = [];
+          for (var b = 0; b < allDlgBtns.length; b++) {
+            var bt = allDlgBtns[b].innerText.trim();
+            if (bt && !/^(關閉|Close|X|Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(bt)) {
+              if (!/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
+                opts.push(bt);
+                btnList.push(allDlgBtns[b]);
+              }
+            }
+          }
+          if (opts.length >= 2 || (hasSubmitOrSkip && opts.length >= 1)) {
+            askInfo = { question: dTitle || '需要您的確認或決策', options: opts };
+            optionButtons = btnList;
+            submitButtonEl = dlgSubmitBtn;
+            askFound = true;
+            break;
+          }
+        }
+      }
+
+      // 1.4 Strategy D: Check for Proceed / Approve banner
       if (!askFound) {
         var allBtns = document.querySelectorAll('button');
         for (var i = 0; i < allBtns.length; i++) {
@@ -318,6 +495,7 @@ function getObserverScript() {
       }
 
       window.__agOptionButtons = optionButtons;
+      window.__agSubmitButton = submitButtonEl;
 
       // 2. Scrape files changed & diff metrics from header
       var filesChangedCount = 0;
@@ -548,6 +726,7 @@ function getObserverScript() {
       if (askFound) {
         status = 'ask';
         statusText = '等待使用者決策';
+        responseInfo = null;
       } else if (isWorking) {
         if (hasThinking) {
           status = 'thinking';
@@ -592,7 +771,23 @@ function getObserverScript() {
       try {
         var btns = window.__agOptionButtons;
         if (btns && btns[optionIndex]) {
-          btns[optionIndex].click();
+          var targetEl = btns[optionIndex];
+          var radioOrInp = targetEl.querySelector ? targetEl.querySelector('input[type="radio"], input[type="checkbox"]') : null;
+          if (radioOrInp) {
+            radioOrInp.click();
+          } else {
+            targetEl.click();
+          }
+          var subBtn = window.__agSubmitButton;
+          if (subBtn) {
+            setTimeout(function() {
+              try {
+                if (subBtn && typeof subBtn.click === 'function') {
+                  subBtn.click();
+                }
+              } catch (_) {}
+            }, 120);
+          }
         }
       } catch (e) {
         console.warn('[ag-status-observer] Failed to click option:', e);
@@ -628,60 +823,216 @@ function getScraperExpression() {
       let askInfo = null;
       let askFound = false;
 
-      const dialogs = document.querySelectorAll('[role="dialog"], [class*="dialog"], [class*="modal"]');
-      for (let d = 0; d < dialogs.length; d++) {
-        const dlg = dialogs[d];
-        const dlgText = dlg.innerText || '';
-
-        // 1. Explicit Exclusions: Ignore Settings, Preferences, Feedback, About, Menubars
-        const dlgAttr = (dlg.className || '') + ' ' + (dlg.getAttribute('aria-label') || '') + ' ' + (dlg.id || '');
-        if (/settings|preferences|feedback|about|menubar|context-menu/i.test(dlgAttr)) {
-          continue;
-        }
-        const lines = dlgText.split('\\n').map(s => s.trim()).filter(Boolean);
-        const qTitle = lines[0] || '';
-        if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(qTitle)) {
-          continue;
-        }
-        if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
-          continue;
-        }
-        if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
-          continue;
-        }
-
-        // 2. Inclusion Requirements: Must have Submit/Skip or option inputs
-        let hasSubmitOrSkip = false;
-        const allDlgBtns = dlg.querySelectorAll('button');
-        for (let sbIdx = 0; sbIdx < allDlgBtns.length; sbIdx++) {
-          const sbText = (allDlgBtns[sbIdx].innerText || '').trim();
-          if (/^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(sbText)) {
-            hasSubmitOrSkip = true;
+      function extractCardData(cardEl) {
+        const lines = (cardEl.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+        let qTitle = '';
+        for (let l = 0; l < lines.length; l++) {
+          const ln = lines[l];
+          if (/^(Asking \\d+ question|Waiting for user input\\.\\.\\.|Waiting for user input|跳過|Skip|提交|Submit)$/i.test(ln)) {
+            continue;
+          }
+          if (!qTitle) qTitle = ln;
+          if (ln.indexOf('？') !== -1 || ln.indexOf('?') !== -1) {
+            qTitle = ln;
             break;
           }
         }
-        const optionInputs = dlg.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="option"], [data-option]');
-
-        if (!hasSubmitOrSkip && optionInputs.length === 0) {
-          continue;
-        }
 
         const opts = [];
-        for (let b = 0; b < allDlgBtns.length; b++) {
-          const bt = (allDlgBtns[b].innerText || '').trim();
-          if (bt && !/^(關閉|Close|X|Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(bt)) {
-            if (!/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
-              opts.push(bt);
+        const allCardBtns = cardEl.querySelectorAll('button, [role="button"]');
+        for (let b = 0; b < allCardBtns.length; b++) {
+          const btn = allCardBtns[b];
+          const bt = (btn.innerText || btn.textContent || '').trim();
+          if (!bt || /^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過|關閉|Close|X)$/i.test(bt)) {
+            continue;
+          }
+          if (/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
+            continue;
+          }
+          const cleanText = bt.replace(/^\\s*\\d+[\\s\\.\\:\\、\\)]*/, '').trim() || bt;
+          if (opts.indexOf(cleanText) === -1) {
+            opts.push(cleanText);
+          }
+        }
+
+        if (opts.length === 0) {
+          const radioEls = cardEl.querySelectorAll('[role="radio"], [role="checkbox"], [role="option"], label');
+          for (let r = 0; r < radioEls.length; r++) {
+            const rel = radioEls[r];
+            const rt = (rel.innerText || rel.textContent || '').trim();
+            if (!rt || /^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(rt)) continue;
+            const cleanRt = rt.replace(/^\\s*\\d+[\\s\\.\\:\\、\\)]*/, '').trim() || rt;
+            if (opts.indexOf(cleanRt) === -1) {
+              opts.push(cleanRt);
             }
           }
         }
-        if (opts.length >= 2 || (hasSubmitOrSkip && opts.length >= 1)) {
-          askInfo = { question: qTitle || '需要您的確認或決策', options: opts };
-          askFound = true;
-          break;
+
+        if (opts.length === 0) {
+          const allDescendants = cardEl.querySelectorAll('div, li, p');
+          for (let d = 0; d < allDescendants.length; d++) {
+            const dEl = allDescendants[d];
+            if (dEl.children.length > 4) continue;
+            const dt = (dEl.innerText || '').trim();
+            const mNum = dt.match(/^(\\d+)[\\s\\.\\:\\、\\)]+(.+)/s);
+            if (mNum && mNum[1] && mNum[2]) {
+              const optText = mNum[2].trim();
+              if (optText && opts.indexOf(optText) === -1) {
+                opts.push(optText);
+              }
+            } else if (/^\\(Recommended\\)|^Other\\b/i.test(dt) && opts.indexOf(dt) === -1) {
+              opts.push(dt);
+            }
+          }
+        }
+
+        if (opts.length === 0) {
+          for (let pl = 0; pl < lines.length; pl++) {
+            const lineText = lines[pl];
+            if (/^(Asking|Waiting|跳過|Skip|提交|Submit|Close|關閉)/i.test(lineText)) continue;
+            if (lineText === qTitle) continue;
+            const m = lineText.match(/^(\\d+)[\\s\\.\\:\\、\\)]+(.+)/);
+            if (m && m[2].trim()) {
+              opts.push(m[2].trim());
+            } else if (/^\\(Recommended\\)|^Other\\b/i.test(lineText)) {
+              opts.push(lineText);
+            }
+          }
+        }
+
+        return {
+          question: qTitle || '需要您的確認或決策',
+          options: opts
+        };
+      }
+
+      // 1.1 Strategy A: Find inline question card via action buttons
+      const allButtons = document.querySelectorAll('button, [role="button"]');
+      for (let bIdx = 0; bIdx < allButtons.length; bIdx++) {
+        const btn = allButtons[bIdx];
+        const btnText = (btn.innerText || btn.textContent || '').trim();
+        if (/^(Submit|送出|提交|確認送出|確定)$/i.test(btnText) || /^提交\\b/i.test(btnText) || /^Submit\\b/i.test(btnText)) {
+          const rect = btn.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            let curr = btn.parentElement;
+            let matchedCard = null;
+            for (let depth = 0; depth < 8 && curr && curr !== document.body && curr !== document.documentElement; depth++) {
+              const attr = (curr.className || '') + ' ' + (curr.getAttribute('aria-label') || '') + ' ' + (curr.id || '');
+              if (/settings|preferences|feedback|about|menubar|context-menu/i.test(attr)) {
+                break;
+              }
+              const cText = curr.innerText || '';
+              if (cText.indexOf('應用程式設定') !== -1 || (cText.indexOf('外觀') !== -1 && cText.indexOf('模型') !== -1)) {
+                break;
+              }
+              if (cText.indexOf('？') !== -1 || cText.indexOf('?') !== -1 || /Waiting for user input|Asking \\d+ question|Recommended|Other/i.test(cText)) {
+                matchedCard = curr;
+                if (/form|rounded|card|border/i.test(curr.className || '') || cText.indexOf('Waiting for user input') !== -1) {
+                  break;
+                }
+              }
+              curr = curr.parentElement;
+            }
+
+            if (matchedCard) {
+              const cardData = extractCardData(matchedCard);
+              if (cardData.options.length >= 1) {
+                askInfo = {
+                  question: cardData.question,
+                  options: cardData.options
+                };
+                askFound = true;
+                break;
+              }
+            }
+          }
         }
       }
 
+      // 1.2 Strategy B: Find via "Waiting for user input" indicator
+      if (!askFound) {
+        const allTextNodes = document.querySelectorAll('div, span, p');
+        for (let tni = 0; tni < allTextNodes.length; tni++) {
+          const tn = allTextNodes[tni];
+          const tnText = (tn.innerText || '').trim();
+          if (tnText === 'Waiting for user input...' || tnText === 'Waiting for user input' || /^Asking \\d+ question/i.test(tnText)) {
+            let pNode = tn.parentElement;
+            while (pNode && pNode !== document.body) {
+              const pBtns = pNode.querySelectorAll('button');
+              if (pBtns.length >= 2) {
+                const pData = extractCardData(pNode);
+                if (pData.options.length >= 1) {
+                  askInfo = {
+                    question: pData.question,
+                    options: pData.options
+                  };
+                  askFound = true;
+                  break;
+                }
+              }
+              pNode = pNode.parentElement;
+            }
+            if (askFound) break;
+          }
+        }
+      }
+
+      // 1.3 Strategy C: Check dialog elements
+      if (!askFound) {
+        const dialogs = document.querySelectorAll('[role="dialog"], [class*="dialog"], [class*="modal"]');
+        for (let d = 0; d < dialogs.length; d++) {
+          const dlg = dialogs[d];
+          const dlgText = dlg.innerText || '';
+
+          const dlgAttr = (dlg.className || '') + ' ' + (dlg.getAttribute('aria-label') || '') + ' ' + (dlg.id || '');
+          if (/settings|preferences|feedback|about|menubar|context-menu/i.test(dlgAttr)) {
+            continue;
+          }
+          const lines = dlgText.split('\\n').map(s => s.trim()).filter(Boolean);
+          const qTitle = lines[0] || '';
+          if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(qTitle)) {
+            continue;
+          }
+          if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
+            continue;
+          }
+          if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
+            continue;
+          }
+
+          let hasSubmitOrSkip = false;
+          const allDlgBtns = dlg.querySelectorAll('button');
+          for (let sbIdx = 0; sbIdx < allDlgBtns.length; sbIdx++) {
+            const sbText = (allDlgBtns[sbIdx].innerText || '').trim();
+            if (/^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(sbText)) {
+              hasSubmitOrSkip = true;
+              break;
+            }
+          }
+          const optionInputs = dlg.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="option"], [data-option]');
+
+          if (!hasSubmitOrSkip && optionInputs.length === 0) {
+            continue;
+          }
+
+          const opts = [];
+          for (let b = 0; b < allDlgBtns.length; b++) {
+            const bt = (allDlgBtns[b].innerText || '').trim();
+            if (bt && !/^(關閉|Close|X|Submit|送出|提交|確認送出|確定|Skip|略過|跳過)$/i.test(bt)) {
+              if (!/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
+                opts.push(bt);
+              }
+            }
+          }
+          if (opts.length >= 2 || (hasSubmitOrSkip && opts.length >= 1)) {
+            askInfo = { question: qTitle || '需要您的確認或決策', options: opts };
+            askFound = true;
+            break;
+          }
+        }
+      }
+
+      // 1.4 Strategy D: Check Proceed / Approve banner
       if (!askFound) {
         const allBtns = document.querySelectorAll('button');
         for (let i = 0; i < allBtns.length; i++) {
@@ -834,6 +1185,7 @@ function getScraperExpression() {
       if (askFound) {
         status = 'ask';
         statusText = '等待使用者決策';
+        responseInfo = null;
       } else if (isWorking) {
         if (hasThinking) {
           status = 'thinking';
@@ -918,6 +1270,57 @@ function getOptionClickExpression(optionIndex) {
   return `
     (() => {
       const idx = ${Number(optionIndex)};
+      try {
+        const btns = window.__agOptionButtons;
+        if (btns && btns[idx]) {
+          const targetEl = btns[idx];
+          const radioOrInp = targetEl.querySelector ? targetEl.querySelector('input[type="radio"], input[type="checkbox"]') : null;
+          if (radioOrInp) {
+            radioOrInp.click();
+          } else {
+            targetEl.click();
+          }
+          const subBtn = window.__agSubmitButton;
+          if (subBtn) {
+            setTimeout(() => {
+              try {
+                if (subBtn && typeof subBtn.click === 'function') {
+                  subBtn.click();
+                }
+              } catch (_) {}
+            }, 120);
+          }
+          return true;
+        }
+      } catch (_) {}
+
+      const allBtns = Array.from(document.querySelectorAll('button, [role="button"]'));
+      let submitBtn = null;
+      for (let i = 0; i < allBtns.length; i++) {
+        const t = (allBtns[i].innerText || '').trim();
+        if (/^(Submit|送出|提交|確認送出|確定)$/i.test(t) || /^提交\\b/i.test(t) || /^Submit\\b/i.test(t)) {
+          submitBtn = allBtns[i];
+          break;
+        }
+      }
+      if (submitBtn) {
+        let parentCard = submitBtn.parentElement;
+        for (let d = 0; d < 8 && parentCard && parentCard !== document.body; d++) {
+          const cBtns = Array.from(parentCard.querySelectorAll('button, [role="button"], [role="radio"], label')).filter(b => {
+            const bt = (b.innerText || '').trim();
+            return bt && !/^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過|關閉|Close|X)$/i.test(bt);
+          });
+          if (cBtns.length >= 1 && cBtns[idx]) {
+            cBtns[idx].click();
+            setTimeout(() => {
+              try { submitBtn.click(); } catch (_) {}
+            }, 120);
+            return true;
+          }
+          parentCard = parentCard.parentElement;
+        }
+      }
+
       const dialogs = document.querySelectorAll('[role="dialog"], [class*="dialog"], [class*="modal"]');
       for (let d = 0; d < dialogs.length; d++) {
         const dlg = dialogs[d];
@@ -931,7 +1334,6 @@ function getOptionClickExpression(optionIndex) {
         }
       }
 
-      const allBtns = document.querySelectorAll('button');
       for (let i = 0; i < allBtns.length; i++) {
         const bText = (allBtns[i].innerText || '').trim();
         if (/^(Proceed|Approve|同意執行|繼續執行)/i.test(bText)) {

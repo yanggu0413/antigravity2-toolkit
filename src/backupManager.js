@@ -12,6 +12,11 @@ const configManager = require('./configManager');
  */
 
 function backupAsar(force = false, manualDir = null) {
+  const perm = paths.checkWritePermissions(manualDir);
+  if (!perm.writable && perm.needsElevation) {
+    throw new Error(perm.hint);
+  }
+
   const asarPath = paths.getAsarPath(manualDir);
   const backupPath = paths.getAsarBackupPath(manualDir);
   const unpackedDir = paths.getAsarUnpackedDir(manualDir);
@@ -59,8 +64,13 @@ function backupAsar(force = false, manualDir = null) {
 }
 
 function restoreAsar(manualDir = null) {
-  const backupPath = paths.getAsarBackupPath(manualDir);
+  const perm = paths.checkWritePermissions(manualDir);
+  if (!perm.writable && perm.needsElevation) {
+    throw new Error(perm.hint);
+  }
+
   const asarPath = paths.getAsarPath(manualDir);
+  const backupPath = paths.getAsarBackupPath(manualDir);
   const devAppDir = paths.getDevAppDir(manualDir);
   const disabledPath = paths.getAsarDisabledPath(manualDir);
   const unpackedDir = paths.getAsarUnpackedDir(manualDir);
