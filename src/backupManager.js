@@ -22,17 +22,27 @@ function backupAsar(force = false, manualDir = null) {
   const unpackedDir = paths.getAsarUnpackedDir(manualDir);
   const unpackedBackupDir = paths.getAsarUnpackedBackupDir(manualDir);
 
+  const isValidSource = (p) => {
+    if (!p || !fs.existsSync(p)) return false;
+    try {
+      const stat = fs.statSync(p);
+      return stat.isFile() && stat.size > 0;
+    } catch (_) {
+      return false;
+    }
+  };
+
   let sourceAsar = null;
-  if (fs.existsSync(asarPath)) {
+  if (isValidSource(asarPath)) {
     sourceAsar = asarPath;
   } else {
     const disabledPath = paths.getAsarDisabledPath(manualDir);
-    if (fs.existsSync(disabledPath)) {
+    if (isValidSource(disabledPath)) {
       sourceAsar = disabledPath;
-    } else if (fs.existsSync(backupPath)) {
+    } else if (isValidSource(backupPath)) {
       sourceAsar = backupPath;
     } else {
-      throw new Error(`Cannot create backup: '${asarPath}' not found.`);
+      throw new Error(`Cannot create backup: valid '${asarPath}' not found.`);
     }
   }
 

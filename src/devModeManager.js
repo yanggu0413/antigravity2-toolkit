@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const asar = require('@electron/asar');
 const paths = require('./paths');
 const backupManager = require('./backupManager');
@@ -37,7 +38,10 @@ async function enableDevMode(options = {}) {
 
   if (!options.skipProcessCheck && !process.env.ANTIGRAVITY_TEST_MODE && processManager.isAntigravityRunning()) {
     if (options.kill) {
-      processManager.killProcesses();
+      const killed = processManager.killProcesses();
+      if (!killed && processManager.isAntigravityRunning()) {
+        throw new Error('Failed to terminate all Antigravity processes. Please close them manually.');
+      }
     } else {
       throw new Error('Antigravity is currently running. Close it or specify --kill.');
     }
@@ -116,7 +120,10 @@ async function disableDevMode(options = {}) {
 
   if (!options.skipProcessCheck && !process.env.ANTIGRAVITY_TEST_MODE && processManager.isAntigravityRunning()) {
     if (options.kill) {
-      processManager.killProcesses();
+      const killed = processManager.killProcesses();
+      if (!killed && processManager.isAntigravityRunning()) {
+        throw new Error('Failed to terminate all Antigravity processes. Please close them manually.');
+      }
     } else {
       throw new Error('Antigravity is currently running. Close it or specify --kill.');
     }
@@ -127,12 +134,36 @@ async function disableDevMode(options = {}) {
   const asarDisabledPath = paths.getAsarDisabledPath(manualDir);
   const asarBackupPath = paths.getAsarBackupPath(manualDir);
 
-  // 1. Remove resources/app/
+  let devBackupPath = null;
   if (fs.existsSync(devAppDir)) {
+    // 1. If repack requested, repack devAppDir into asar before disabling
+    if (options.repack) {
+      const targetAsar = fs.existsSync(asarDisabledPath) ? asarDisabledPath : asarPath;
+      const tempAsar = path.join(os.tmpdir(), `ag-dev-repack-${Date.now()}.asar`);
+      await asar.createPackageWithOptions(devAppDir, tempAsar, {
+        unpack: '{**/*.node,**/chrome-devtools-mcp/**}',
+        unpackDir: 'node_modules/chrome-devtools-mcp',
+      });
+      fs.copyFileSync(tempAsar, targetAsar);
+      try { fs.rmSync(tempAsar, { force: true }); } catch (_) {}
+    }
+
+    // 2. Always create a safety backup of devAppDir unless explicitly disabled
+    if (options.noBackup !== true) {
+      devBackupPath = path.join(paths.getResourcesDir(manualDir), `app.dev-bak-${Date.now()}`);
+      try {
+        fs.cpSync(devAppDir, devBackupPath, { recursive: true, force: true });
+        console.log(`[ag-toolkit] Backed up Dev Mode resources/app/ to ${devBackupPath}`);
+      } catch (e) {
+        console.warn('[ag-toolkit] Failed to create dev-mode backup:', e.message);
+      }
+    }
+
+    // 3. Remove resources/app/
     fs.rmSync(devAppDir, { recursive: true, force: true });
   }
 
-  // 2. Restore asar
+  // 4. Restore asar
   if (fs.existsSync(asarDisabledPath)) {
     if (fs.existsSync(asarPath)) {
       try { fs.rmSync(asarPath, { force: true }); } catch (_) {}
@@ -144,13 +175,14 @@ async function disableDevMode(options = {}) {
 
   try { asar.uncache(asarPath); } catch (_) {}
 
-  // 3. Re-sign app on macOS
+  // 5. Re-sign app on macOS
   localizationManager.resignAppOnMac(paths.getResourcesDir(manualDir));
 
   return {
     success: true,
     mode: 'asar',
     asarPath,
+    devBackupPath,
   };
 }
 

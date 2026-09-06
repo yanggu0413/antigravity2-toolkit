@@ -56,14 +56,19 @@ function parseStepText(rawText) {
       };
     }
 
-    if (/^(Explored|Read|Viewed|讀取)/i.test(verb)) {
-      const target = parts[1] || 'Files';
+    if (/^(Explored|Exploring|Read|Reading|Viewed|Viewing|Analyzed|Analyzing|讀取|探索|已探索|分析|已分析)/i.test(verb)) {
+      const target = (parts[1] || 'Files').replace(/^(?:js|ts|jsx|tsx|py|html|css|json|md|sh|bat)\s+/i, '');
+      const mCount = target.match(/^(\d+)\s+files?/i);
+      const count = mCount ? parseInt(mCount[1], 10) : 1;
+      const mFileOnly = target.match(/^([a-zA-Z0-9_\-\.\/\\\~]+?\.[a-zA-Z0-9]+)/);
       return {
         type: 'read',
         text: target,
+        fileName: mFileOnly ? mFileOnly[1] : target,
         diff: '',
         addLines: 0,
         delLines: 0,
+        count,
       };
     }
 
@@ -75,12 +80,13 @@ function parseStepText(rawText) {
         diff: '',
         addLines: 0,
         delLines: 0,
+        count: 1,
       };
     }
   }
 
-  // Single-line DOM format (e.g. "Edited foo.js +10 -2", "Ran git status", "Explored 3 files")
-  const mEdit = cleaned.match(/^(?:Edited|Modified|修改)\s+(?:<>\s*)?([^\n+\-]+?)(?:\s+\+(\d+))?(?:\s+-(\d+))?$/i);
+  // Single-line DOM format (e.g. "Edited foo.js +10 -2", "Ran git status", "Explored 23 files", "Analyzed test.js #L1-100")
+  const mEdit = cleaned.match(/^(?:Edited|Modified|修改)\s+(?:<>\s*)?(?:(?:js|ts|jsx|tsx|py|html|css|json|md|sh|bat)\s+)?([^\n+\-]+?)(?:\s+\+(\d+))?(?:\s+-(\d+))?$/i);
   if (mEdit) {
     const target = mEdit[1].trim();
     const addLines = mEdit[2] ? parseInt(mEdit[2], 10) : 0;
@@ -125,14 +131,21 @@ function parseStepText(rawText) {
     };
   }
 
-  const mRead = cleaned.match(/^(?:Explored|Read|Viewed|讀取|已探索|探索)\s*(?:file\s+)?(.+)$/i);
+  const mRead = cleaned.match(/^(?:Explored|Exploring|Analyzed|Analyzing|Read|Reading|Viewed|Viewing|讀取|已探索|探索|分析|已分析)\s+(?:(?:js|ts|jsx|tsx|py|html|css|json|md|sh|bat|file|files)\s+)?(.+)$/i);
   if (mRead) {
+    let rawTarget = mRead[1].trim();
+    rawTarget = rawTarget.replace(/\s*[>v]\s*$/, '').trim();
+    const mFiles = rawTarget.match(/^(\d+)\s+files?/i);
+    const count = mFiles ? parseInt(mFiles[1], 10) : 1;
+    const mFileOnly = rawTarget.match(/^([a-zA-Z0-9_\-\.\/\\\~]+?\.[a-zA-Z0-9]+)/);
     return {
       type: 'read',
-      text: mRead[1].trim(),
+      text: rawTarget,
+      fileName: mFileOnly ? mFileOnly[1] : rawTarget,
       diff: '',
       addLines: 0,
       delLines: 0,
+      count,
     };
   }
 
@@ -157,31 +170,41 @@ function extractMetrics(stepTexts) {
   if (!Array.isArray(stepTexts)) return result;
 
   const seenEdits = new Set();
-  const seenReads = new Set();
+  const seenReadFiles = new Set();
+  const seenActKeys = new Set();
+  let groupReadCount = 0;
 
   for (const raw of stepTexts) {
     const parsed = parseStepText(raw);
     if (!parsed) continue;
 
-    result.activities.push({
-      type: parsed.type,
-      text: parsed.text,
-      diff: parsed.diff,
-    });
+    const actKey = `${parsed.type}:${parsed.text.replace(/\s+/g, ' ')}${parsed.diff ? ':' + parsed.diff : ''}`;
+    if (!seenActKeys.has(actKey)) {
+      seenActKeys.add(actKey);
+      result.activities.push({
+        type: parsed.type,
+        text: parsed.text,
+        diff: parsed.diff,
+      });
+    }
 
     if (parsed.type === 'edit') {
       seenEdits.add(parsed.text);
       result.addLines += parsed.addLines;
       result.delLines += parsed.delLines;
     } else if (parsed.type === 'read') {
-      seenReads.add(parsed.text);
+      if (parsed.count && parsed.count > 1) {
+        groupReadCount = Math.max(groupReadCount, parsed.count);
+      } else {
+        seenReadFiles.add(parsed.fileName || parsed.text);
+      }
     } else if (parsed.type === 'cmd') {
       result.cmdCount += (parsed.count || 1);
     }
   }
 
   result.editCount = seenEdits.size || (result.addLines > 0 ? 1 : 0);
-  result.readCount = seenReads.size;
+  result.readCount = Math.max(groupReadCount + seenReadFiles.size, groupReadCount, seenReadFiles.size);
 
   return result;
 }
@@ -524,60 +547,87 @@ function getObserverScript() {
 
       // 3. Scrape step action nodes across DOM
       var activities = [];
-      var seenRaw = {};
+      var seenActKeys = {};
       var seenEdits = {};
-      var seenReads = {};
+      var seenReadFiles = {};
+      var groupReadCount = 0;
       var cmdCount = 0;
 
-      var allStepNodes = document.querySelectorAll('div.flex.flex-row.items-center.gap-1, button[class*="tabular-nums"], div.truncate');
+      var allStepNodes = document.querySelectorAll(
+        'div.flex.flex-row.items-center.gap-1, button[class*="tabular-nums"], div.truncate, ' +
+        '[class*="step-row"], [class*="action-row"], div[class*="leading-relaxed"] div.truncate'
+      );
       for (var sn = 0; sn < allStepNodes.length; sn++) {
         var raw = (allStepNodes[sn].innerText || '').trim().replace(/\s+/g, ' ');
-        if (!raw || seenRaw[raw]) continue;
+        if (!raw) continue;
+        raw = raw.replace(/\s*[>v]\s*$/, '').trim();
 
-        // Pattern: Edited <file> +X -Y
-        var mEdit = raw.match(/^(?:Edited|Modified|修改)\s+(?:<>\s*)?([^\n+\-]+?)(?:\s+\+(\d+))?(?:\s+-(\d+))?$/i);
+        // 3.1 Pattern: Edited <file> +X -Y
+        var mEdit = raw.match(/^(?:Edited|Modified|修改)\s+(?:<>\s*)?(?:(?:js|ts|jsx|tsx|py|html|css|json|md|sh|bat)\s+)?([^\n+\-]+?)(?:\s+\+(\d+))?(?:\s+-(\d+))?$/i);
         if (mEdit) {
-          seenRaw[raw] = true;
           var fName = mEdit[1].trim();
-          seenEdits[fName] = true;
           var add = mEdit[2] ? parseInt(mEdit[2], 10) : 0;
           var del = mEdit[3] ? parseInt(mEdit[3], 10) : 0;
           var diffStr = (add > 0 || del > 0) ? ('+' + add + ' -' + del) : '';
-          activities.push({ type: 'edit', text: fName, diff: diffStr });
+          var eKey = 'edit:' + fName + (diffStr ? ':' + diffStr : '');
+          if (!seenActKeys[eKey]) {
+            seenActKeys[eKey] = true;
+            seenEdits[fName] = true;
+            activities.push({ type: 'edit', text: fName, diff: diffStr });
+          }
           continue;
         }
 
-        // Pattern: Ran <N> commands or <N> commands
+        // 3.2 Pattern: Ran <N> commands
         var mCmdGroup = raw.match(/^(?:Ran|Run|Executed|執行中?|已執行)?\s*(\d+)\s*(?:commands?|個?(?:指令|命令))$/i);
         if (mCmdGroup) {
-          seenRaw[raw] = true;
           var nCmds = parseInt(mCmdGroup[1], 10);
-          cmdCount += nCmds;
-          activities.push({ type: 'cmd', text: nCmds + ' 個終端指令', diff: '' });
+          var cgKey = 'cmd:group:' + nCmds;
+          if (!seenActKeys[cgKey]) {
+            seenActKeys[cgKey] = true;
+            cmdCount += nCmds;
+            activities.push({ type: 'cmd', text: nCmds + ' 個終端指令', diff: '' });
+          }
           continue;
         }
 
-        // Pattern: Ran <cmd>
+        // 3.3 Pattern: Ran <cmd>
         var mCmd = raw.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
         if (mCmd) {
-          seenRaw[raw] = true;
           var cmd = mCmd[1].trim();
           if (cmd.indexOf('node scratch/') === 0) {
             cmd = cmd.replace(/^node scratch\//, '');
           }
           cmd = cmd.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
-          cmdCount++;
-          activities.push({ type: 'cmd', text: cmd.length > 50 ? cmd.slice(0, 47) + '...' : cmd, diff: '' });
+          var cmdKey = 'cmd:' + cmd;
+          if (!seenActKeys[cmdKey]) {
+            seenActKeys[cmdKey] = true;
+            cmdCount++;
+            activities.push({ type: 'cmd', text: cmd.length > 50 ? cmd.slice(0, 47) + '...' : cmd, diff: '' });
+          }
           continue;
         }
 
-        // Pattern: Explored <N> files
-        var mRead = raw.match(/^(?:Explored|Read|Viewed|讀取|已探索|探索)\s*(?:file\s+)?(.+)$/i);
+        // 3.4 Pattern: Explored / Exploring / Analyzed / Analyzing / Read
+        var mRead = raw.match(/^(?:Explored|Exploring|Analyzed|Analyzing|Read|Reading|Viewed|Viewing|讀取|已探索|探索|分析|已分析)\s+(?:(?:js|ts|jsx|tsx|py|html|css|json|md|sh|bat|file|files)\s+)?(.+)$/i);
         if (mRead) {
-          seenRaw[raw] = true;
-          var rText = mRead[1].trim();
-          seenReads[rText] = true;
-          activities.push({ type: 'read', text: rText, diff: '' });
+          var rTarget = mRead[1].trim().replace(/\s*[>v]\s*$/, '').trim();
+          var mCount = rTarget.match(/^(\d+)\s+files?/i);
+          var count = mCount ? parseInt(mCount[1], 10) : 1;
+          var mFileOnly = rTarget.match(/^([a-zA-Z0-9_\-\.\/\\\~]+?\.[a-zA-Z0-9]+)/);
+          var fBase = mFileOnly ? mFileOnly[1] : rTarget;
+
+          if (count > 1) {
+            groupReadCount = Math.max(groupReadCount, count);
+          } else {
+            seenReadFiles[fBase] = true;
+          }
+
+          var rKey = 'read:' + rTarget;
+          if (!seenActKeys[rKey]) {
+            seenActKeys[rKey] = true;
+            activities.push({ type: 'read', text: rTarget, diff: '' });
+          }
           continue;
         }
       }
@@ -587,8 +637,9 @@ function getObserverScript() {
       for (var ts = 0; ts < termSpans.length; ts++) {
         var tText = (termSpans[ts].innerText || '').trim();
         if (tText.indexOf('node ') === 0 || tText.indexOf('npm ') === 0 || tText.indexOf('git ') === 0) {
-          if (!seenRaw[tText] && !seenRaw['Ran ' + tText] && !seenRaw['Run ' + tText]) {
-            seenRaw[tText] = true;
+          var tKey = 'cmd:' + tText;
+          if (!seenActKeys[tKey]) {
+            seenActKeys[tKey] = true;
             var cClean = tText.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
             cmdCount++;
             activities.push({ type: 'cmd', text: cClean.length > 50 ? cClean.slice(0, 47) + '...' : cClean, diff: '' });
@@ -596,10 +647,32 @@ function getObserverScript() {
         }
       }
 
-      var readCount = Math.max(Object.keys(seenReads).length, activities.filter(function(a) { return a.type === 'read'; }).length);
+      var readCount = Math.max(groupReadCount + Object.keys(seenReadFiles).length, groupReadCount, Object.keys(seenReadFiles).length, activities.filter(function(a) { return a.type === 'read'; }).length);
       var editCount = Math.max(filesChangedCount, Object.keys(seenEdits).length);
 
       // 4. Detect thinking / running / working state with live second timer
+      var hasActiveWorkingText = false;
+      var hasThinking = false;
+      var allCheckNodes = document.querySelectorAll('button, div[class*="step"], span, p');
+      for (var ci = 0; ci < allCheckNodes.length; ci++) {
+        var cTxt = (allCheckNodes[ci].innerText || '').trim();
+        if (/^Working\.{0,3}$/i.test(cTxt) || /^處理中\.{0,3}$/i.test(cTxt) || /^正在生成\.{0,3}$/i.test(cTxt) || /^Generating\.{0,3}$/i.test(cTxt)) {
+          var cRect = allCheckNodes[ci].getBoundingClientRect();
+          if (cRect.width > 0 && cRect.height > 0) {
+            hasActiveWorkingText = true;
+            break;
+          }
+        }
+        if (/^Thinking\.{0,3}$/i.test(cTxt) || /^思考中\.{0,3}$/i.test(cTxt)) {
+          var tRect = allCheckNodes[ci].getBoundingClientRect();
+          if (tRect.width > 0 && tRect.height > 0) {
+            hasThinking = true;
+            hasActiveWorkingText = true;
+            break;
+          }
+        }
+      }
+
       var hasStopButton = false;
       var candidateStopButtons = document.querySelectorAll(
         'button[aria-label*="Stop" i], button[title*="Stop" i], ' +
@@ -619,71 +692,24 @@ function getObserverScript() {
         }
       }
 
-      if (!hasStopButton) {
-        var textareas = document.querySelectorAll('textarea, [contenteditable="true"]');
-        for (var tai = 0; tai < textareas.length; tai++) {
-          var inputParent = textareas[tai].closest('form, [class*="input"], [class*="prompt"], [class*="chat"]');
-          if (inputParent) {
-            var inputBtns = inputParent.querySelectorAll('button');
-            for (var ibi = 0; ibi < inputBtns.length; ibi++) {
-              var ib = inputBtns[ibi];
-              var ibRect = ib.getBoundingClientRect();
-              if (ibRect.width > 0 && ibRect.height > 0) {
-                var ibLabel = (ib.getAttribute('aria-label') || ib.getAttribute('title') || ib.innerText || '').trim();
-                if (/Stop|停止|中斷/i.test(ibLabel)) {
-                  hasStopButton = true;
-                  break;
-                }
-                if (ib.querySelector('svg rect, rect') && !ib.querySelector('path[d*="M"]') && !/send|submit|attach|voice|語音|發送|送出/i.test(ibLabel)) {
-                  hasStopButton = true;
-                  break;
-                }
-              }
-            }
-          }
-          if (hasStopButton) break;
-        }
-      }
-
-      var hasSpinner = false;
+      var hasChatSpinner = false;
       var spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"]');
       for (var spi = 0; spi < spinners.length; spi++) {
-        var spRect = spinners[spi].getBoundingClientRect();
+        var sp = spinners[spi];
+        var spRect = sp.getBoundingClientRect();
         if (spRect.width > 0 && spRect.height > 0) {
-          var compStyle = window.getComputedStyle ? window.getComputedStyle(spinners[spi]) : null;
-          if (!compStyle || (compStyle.display !== 'none' && compStyle.visibility !== 'hidden' && compStyle.opacity !== '0')) {
-            hasSpinner = true;
-            break;
+          var insideChat = sp.closest('[class*="chat"], [class*="message"], [class*="step"], [class*="conversation"], [class*="timeline"]');
+          if (insideChat) {
+            var compStyle = window.getComputedStyle ? window.getComputedStyle(sp) : null;
+            if (!compStyle || (compStyle.display !== 'none' && compStyle.visibility !== 'hidden' && compStyle.opacity !== '0')) {
+              hasChatSpinner = true;
+              break;
+            }
           }
         }
       }
 
-      var hasThinking = false;
-      var hasWorkingText = false;
-      var allCheckNodes = document.querySelectorAll('button, div[class*="step"], span');
-      for (var ci = 0; ci < allCheckNodes.length; ci++) {
-        var cTxt = (allCheckNodes[ci].innerText || '').trim();
-        if (/^(Thinking|思考中|處理中)\.{0,3}$/i.test(cTxt)) {
-          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
-            hasThinking = true;
-            break;
-          }
-        }
-        if (/^(Thought for|Worked for)/i.test(cTxt)) {
-          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
-            hasThinking = true;
-            break;
-          }
-        }
-        if (cTxt === 'Working.' || cTxt === 'Generating...' || cTxt === '正在生成...' || cTxt === '執行中...') {
-          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
-            hasWorkingText = true;
-            break;
-          }
-        }
-      }
-
-      var isWorking = hasStopButton || hasSpinner;
+      var isWorking = hasStopButton || hasActiveWorkingText || hasChatSpinner;
 
       if (isWorking) {
         if (!window.__ag_work_start_time) {
@@ -728,9 +754,25 @@ function getObserverScript() {
         statusText = '等待使用者決策';
         responseInfo = null;
       } else if (isWorking) {
+        var lastAct = activities.length > 0 ? activities[activities.length - 1] : null;
         if (hasThinking) {
           status = 'thinking';
           statusText = '思考中 (' + elapsedSec + 's)...';
+        } else if (lastAct && lastAct.type === 'read') {
+          status = 'running';
+          var rName = lastAct.text.replace(/^[^\w\.\-\/]+/, '');
+          if (rName.length > 22) rName = rName.slice(0, 19) + '...';
+          statusText = '分析: ' + rName + ' (' + elapsedSec + 's)...';
+        } else if (lastAct && lastAct.type === 'cmd') {
+          status = 'running';
+          var cName = lastAct.text;
+          if (cName.length > 22) cName = cName.slice(0, 19) + '...';
+          statusText = '執行: ' + cName + ' (' + elapsedSec + 's)...';
+        } else if (lastAct && lastAct.type === 'edit') {
+          status = 'running';
+          var eName = lastAct.text;
+          if (eName.length > 22) eName = eName.slice(0, 19) + '...';
+          statusText = '修改: ' + eName + ' (' + elapsedSec + 's)...';
         } else {
           status = 'running';
           statusText = '執行中 (' + elapsedSec + 's)...';
@@ -1051,20 +1093,159 @@ function getScraperExpression() {
         }
       }
 
-      // 2. Scrape steps & metrics
-      const stepTexts = [];
-      const elements = document.querySelectorAll('.truncate, .relative, [class*="flex-row"], [class*="step"]');
-      for (let e = 0; e < elements.length; e++) {
-        const el = elements[e];
-        const txt = (el.innerText || '').trim();
-        if ((txt.startsWith('Edited\\n') || txt.startsWith('Explored\\n') || txt.startsWith('Ran\\n')) && el.children.length <= 4) {
-          stepTexts.push(txt.split('\\n').join(' | '));
+      // 2. Scrape files changed & diff metrics from header
+      let filesChangedCount = 0;
+      let totalAdd = 0;
+      let totalDel = 0;
+
+      const fHeaders = document.querySelectorAll('.files-changed-header');
+      for (let fh = 0; fh < fHeaders.length; fh++) {
+        const fht = (fHeaders[fh].innerText || '').trim();
+        const mf = fht.match(/(\d+)\s+file/i);
+        if (mf) {
+          const fc = parseInt(mf[1], 10);
+          if (fc > filesChangedCount) filesChangedCount = fc;
+        }
+        const ma = fht.match(/\+(\d+)/);
+        if (ma) {
+          const fa = parseInt(ma[1], 10);
+          if (fa > totalAdd) totalAdd = fa;
+        }
+        const md = fht.match(/-(\d+)/);
+        if (md) {
+          const fd = parseInt(md[1], 10);
+          if (fd > totalDel) totalDel = fd;
         }
       }
 
-      const uniqueSteps = Array.from(new Set(stepTexts));
+      // 3. Scrape step action nodes across DOM
+      const activities = [];
+      const seenActKeys = {};
+      const seenEdits = {};
+      const seenReadFiles = {};
+      let groupReadCount = 0;
+      let cmdCount = 0;
 
-      // 3. Detect thinking / running / working state with live second timer
+      const allStepNodes = document.querySelectorAll(
+        'div.flex.flex-row.items-center.gap-1, button[class*="tabular-nums"], div.truncate, ' +
+        '[class*="step-row"], [class*="action-row"], div[class*="leading-relaxed"] div.truncate'
+      );
+      for (let sn = 0; sn < allStepNodes.length; sn++) {
+        let raw = (allStepNodes[sn].innerText || '').trim().replace(/\s+/g, ' ');
+        if (!raw) continue;
+        raw = raw.replace(/\s*[>v]\s*$/, '').trim();
+
+        // 3.1 Pattern: Edited <file> +X -Y
+        const mEdit = raw.match(/^(?:Edited|Modified|修改)\s+(?:<>\s*)?(?:(?:js|ts|jsx|tsx|py|html|css|json|md|sh|bat)\s+)?([^\n+\-]+?)(?:\s+\+(\d+))?(?:\s+-(\d+))?$/i);
+        if (mEdit) {
+          const fName = mEdit[1].trim();
+          const add = mEdit[2] ? parseInt(mEdit[2], 10) : 0;
+          const del = mEdit[3] ? parseInt(mEdit[3], 10) : 0;
+          const diffStr = (add > 0 || del > 0) ? ('+' + add + ' -' + del) : '';
+          const eKey = 'edit:' + fName + (diffStr ? ':' + diffStr : '');
+          if (!seenActKeys[eKey]) {
+            seenActKeys[eKey] = true;
+            seenEdits[fName] = true;
+            activities.push({ type: 'edit', text: fName, diff: diffStr });
+          }
+          continue;
+        }
+
+        // 3.2 Pattern: Ran <N> commands
+        const mCmdGroup = raw.match(/^(?:Ran|Run|Executed|執行中?|已執行)?\s*(\d+)\s*(?:commands?|個?(?:指令|命令))$/i);
+        if (mCmdGroup) {
+          const nCmds = parseInt(mCmdGroup[1], 10);
+          const cgKey = 'cmd:group:' + nCmds;
+          if (!seenActKeys[cgKey]) {
+            seenActKeys[cgKey] = true;
+            cmdCount += nCmds;
+            activities.push({ type: 'cmd', text: nCmds + ' 個終端指令', diff: '' });
+          }
+          continue;
+        }
+
+        // 3.3 Pattern: Ran <cmd>
+        const mCmd = raw.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
+        if (mCmd) {
+          let cmd = mCmd[1].trim();
+          if (cmd.indexOf('node scratch/') === 0) {
+            cmd = cmd.replace(/^node scratch\//, '');
+          }
+          cmd = cmd.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
+          const cmdKey = 'cmd:' + cmd;
+          if (!seenActKeys[cmdKey]) {
+            seenActKeys[cmdKey] = true;
+            cmdCount++;
+            activities.push({ type: 'cmd', text: cmd.length > 50 ? cmd.slice(0, 47) + '...' : cmd, diff: '' });
+          }
+          continue;
+        }
+
+        // 3.4 Pattern: Explored / Exploring / Analyzed / Analyzing / Read
+        const mRead = raw.match(/^(?:Explored|Exploring|Analyzed|Analyzing|Read|Reading|Viewed|Viewing|讀取|已探索|探索|分析|已分析)\s+(?:(?:js|ts|jsx|tsx|py|html|css|json|md|sh|bat|file|files)\s+)?(.+)$/i);
+        if (mRead) {
+          const rTarget = mRead[1].trim().replace(/\s*[>v]\s*$/, '').trim();
+          const mCount = rTarget.match(/^(\d+)\s+files?/i);
+          const count = mCount ? parseInt(mCount[1], 10) : 1;
+          const mFileOnly = rTarget.match(/^([a-zA-Z0-9_\-\.\/\\\~]+?\.[a-zA-Z0-9]+)/);
+          const fBase = mFileOnly ? mFileOnly[1] : rTarget;
+
+          if (count > 1) {
+            groupReadCount = Math.max(groupReadCount, count);
+          } else {
+            seenReadFiles[fBase] = true;
+          }
+
+          const rKey = 'read:' + rTarget;
+          if (!seenActKeys[rKey]) {
+            seenActKeys[rKey] = true;
+            activities.push({ type: 'read', text: rTarget, diff: '' });
+          }
+          continue;
+        }
+      }
+
+      // Check terminal font-mono command headers
+      const termSpans = document.querySelectorAll('span.font-mono, div.font-mono');
+      for (let ts = 0; ts < termSpans.length; ts++) {
+        const tText = (termSpans[ts].innerText || '').trim();
+        if (tText.indexOf('node ') === 0 || tText.indexOf('npm ') === 0 || tText.indexOf('git ') === 0) {
+          const tKey = 'cmd:' + tText;
+          if (!seenActKeys[tKey]) {
+            seenActKeys[tKey] = true;
+            const cClean = tText.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
+            cmdCount++;
+            activities.push({ type: 'cmd', text: cClean.length > 50 ? cClean.slice(0, 47) + '...' : cClean, diff: '' });
+          }
+        }
+      }
+
+      const readCount = Math.max(groupReadCount + Object.keys(seenReadFiles).length, groupReadCount, Object.keys(seenReadFiles).length, activities.filter(a => a.type === 'read').length);
+      const editCount = Math.max(filesChangedCount, Object.keys(seenEdits).length);
+
+      // 4. Detect thinking / running / working state with live second timer
+      let hasActiveWorkingText = false;
+      let hasThinking = false;
+      const allCheckNodes = document.querySelectorAll('button, div[class*="step"], span, p');
+      for (let ci = 0; ci < allCheckNodes.length; ci++) {
+        const cTxt = (allCheckNodes[ci].innerText || '').trim();
+        if (/^Working\.{0,3}$/i.test(cTxt) || /^處理中\.{0,3}$/i.test(cTxt) || /^正在生成\.{0,3}$/i.test(cTxt) || /^Generating\.{0,3}$/i.test(cTxt)) {
+          const cRect = allCheckNodes[ci].getBoundingClientRect();
+          if (cRect.width > 0 && cRect.height > 0) {
+            hasActiveWorkingText = true;
+            break;
+          }
+        }
+        if (/^Thinking\.{0,3}$/i.test(cTxt) || /^思考中\.{0,3}$/i.test(cTxt)) {
+          const tRect = allCheckNodes[ci].getBoundingClientRect();
+          if (tRect.width > 0 && tRect.height > 0) {
+            hasThinking = true;
+            hasActiveWorkingText = true;
+            break;
+          }
+        }
+      }
+
       let hasStopButton = false;
       const candidateStopButtons = document.querySelectorAll(
         'button[aria-label*="Stop" i], button[title*="Stop" i], ' +
@@ -1084,71 +1265,24 @@ function getScraperExpression() {
         }
       }
 
-      if (!hasStopButton) {
-        const textareas = document.querySelectorAll('textarea, [contenteditable="true"]');
-        for (let tai = 0; tai < textareas.length; tai++) {
-          const inputParent = textareas[tai].closest('form, [class*="input"], [class*="prompt"], [class*="chat"]');
-          if (inputParent) {
-            const inputBtns = inputParent.querySelectorAll('button');
-            for (let ibi = 0; ibi < inputBtns.length; ibi++) {
-              const ib = inputBtns[ibi];
-              const ibRect = ib.getBoundingClientRect();
-              if (ibRect.width > 0 && ibRect.height > 0) {
-                const ibLabel = (ib.getAttribute('aria-label') || ib.getAttribute('title') || ib.innerText || '').trim();
-                if (/Stop|停止|中斷/i.test(ibLabel)) {
-                  hasStopButton = true;
-                  break;
-                }
-                if (ib.querySelector('svg rect, rect') && !ib.querySelector('path[d*="M"]') && !/send|submit|attach|voice|語音|發送|送出/i.test(ibLabel)) {
-                  hasStopButton = true;
-                  break;
-                }
-              }
-            }
-          }
-          if (hasStopButton) break;
-        }
-      }
-
-      let hasSpinner = false;
+      let hasChatSpinner = false;
       const spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"]');
       for (let spi = 0; spi < spinners.length; spi++) {
-        const spRect = spinners[spi].getBoundingClientRect();
+        const sp = spinners[spi];
+        const spRect = sp.getBoundingClientRect();
         if (spRect.width > 0 && spRect.height > 0) {
-          const compStyle = window.getComputedStyle ? window.getComputedStyle(spinners[spi]) : null;
-          if (!compStyle || (compStyle.display !== 'none' && compStyle.visibility !== 'hidden' && compStyle.opacity !== '0')) {
-            hasSpinner = true;
-            break;
+          const insideChat = sp.closest('[class*="chat"], [class*="message"], [class*="step"], [class*="conversation"], [class*="timeline"]');
+          if (insideChat) {
+            const compStyle = window.getComputedStyle ? window.getComputedStyle(sp) : null;
+            if (!compStyle || (compStyle.display !== 'none' && compStyle.visibility !== 'hidden' && compStyle.opacity !== '0')) {
+              hasChatSpinner = true;
+              break;
+            }
           }
         }
       }
 
-      let hasThinking = false;
-      let hasWorkingText = false;
-      const allCheckNodes = document.querySelectorAll('button, div[class*="step"], span');
-      for (let ci = 0; ci < allCheckNodes.length; ci++) {
-        const cTxt = (allCheckNodes[ci].innerText || '').trim();
-        if (/^(Thinking|思考中|處理中)\.{0,3}$/i.test(cTxt)) {
-          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
-            hasThinking = true;
-            break;
-          }
-        }
-        if (/^(Thought for|Worked for)/i.test(cTxt)) {
-          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
-            hasThinking = true;
-            break;
-          }
-        }
-        if (cTxt === 'Working.' || cTxt === 'Generating...' || cTxt === '正在生成...' || cTxt === '執行中...') {
-          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
-            hasWorkingText = true;
-            break;
-          }
-        }
-      }
-
-      const isWorking = hasStopButton || hasSpinner;
+      const isWorking = hasStopButton || hasActiveWorkingText || hasChatSpinner;
 
       if (isWorking) {
         if (!window.__ag_work_start_time) {
@@ -1157,9 +1291,10 @@ function getScraperExpression() {
       } else {
         window.__ag_work_start_time = null;
       }
+
       const elapsedSec = window.__ag_work_start_time ? Math.max(1, Math.floor((Date.now() - window.__ag_work_start_time) / 1000)) : 0;
 
-      // Scrape latest AI Agent response text
+      // 5. Scrape latest AI Agent response text
       let responseInfo = null;
       const aiResponseEls = document.querySelectorAll('div.leading-relaxed.select-text');
       if (aiResponseEls.length > 0) {
@@ -1176,10 +1311,15 @@ function getScraperExpression() {
           }
           if (!snippet && lines.length > 0) snippet = lines[0];
           if (snippet.length > 150) snippet = snippet.slice(0, 147) + '...';
-          responseInfo = { snippet: snippet, full: rawAiText.slice(0, 1200) };
+
+          responseInfo = {
+            snippet: snippet,
+            full: rawAiText.slice(0, 1200)
+          };
         }
       }
 
+      // Compute status with live real-time ticking
       let status = 'idle';
       let statusText = '待命中';
       if (askFound) {
@@ -1187,9 +1327,25 @@ function getScraperExpression() {
         statusText = '等待使用者決策';
         responseInfo = null;
       } else if (isWorking) {
+        const lastAct = activities.length > 0 ? activities[activities.length - 1] : null;
         if (hasThinking) {
           status = 'thinking';
           statusText = '思考中 (' + elapsedSec + 's)...';
+        } else if (lastAct && lastAct.type === 'read') {
+          status = 'running';
+          let rName = lastAct.text.replace(/^[^\w\.\-\/]+/, '');
+          if (rName.length > 22) rName = rName.slice(0, 19) + '...';
+          statusText = '分析: ' + rName + ' (' + elapsedSec + 's)...';
+        } else if (lastAct && lastAct.type === 'cmd') {
+          status = 'running';
+          let cName = lastAct.text;
+          if (cName.length > 22) cName = cName.slice(0, 19) + '...';
+          statusText = '執行: ' + cName + ' (' + elapsedSec + 's)...';
+        } else if (lastAct && lastAct.type === 'edit') {
+          status = 'running';
+          let eName = lastAct.text;
+          if (eName.length > 22) eName = eName.slice(0, 19) + '...';
+          statusText = '修改: ' + eName + ' (' + elapsedSec + 's)...';
         } else {
           status = 'running';
           statusText = '執行中 (' + elapsedSec + 's)...';
@@ -1199,64 +1355,13 @@ function getScraperExpression() {
         statusText = '任務已完成';
       }
 
-      // Parse activity metrics
-      let readCount = 0;
-      let editCount = 0;
-      let addLines = 0;
-      let delLines = 0;
-      let cmdCount = 0;
-      const activities = [];
-      const seenEdits = new Set();
-      const seenReads = new Set();
-
-      for (let u = 0; u < uniqueSteps.length; u++) {
-        const parts = uniqueSteps[u].split('|').map(p => p.trim());
-        if (parts.length === 0) continue;
-        const verb = parts[0];
-
-        if (/^(Edited|Modified|修改)/i.test(verb)) {
-          const target = parts[1] || 'File';
-          let aL = 0;
-          let dL = 0;
-          for (let pIdx = 2; pIdx < parts.length; pIdx++) {
-            const am = parts[pIdx].match(/^\\+(\\d+)/);
-            if (am) aL += parseInt(am[1], 10);
-            const dm = parts[pIdx].match(/^-(\\d+)/);
-            if (dm) dL += parseInt(dm[1], 10);
-          }
-          seenEdits.add(target);
-          addLines += aL;
-          delLines += dL;
-          activities.push({
-            type: 'edit',
-            text: target,
-            diff: (aL > 0 || dL > 0) ? ('+' + aL + ' -' + dL) : ''
-          });
-        } else if (/^(Explored|Read|讀取)/i.test(verb)) {
-          const rTarget = parts[1] || 'Files';
-          seenReads.add(rTarget);
-          activities.push({ type: 'read', text: rTarget, diff: '' });
-        } else if (/^(Ran|Executed|執行)/i.test(verb)) {
-          const cTarget = parts[1] || 'Command';
-          cmdCount++;
-          activities.push({
-            type: 'cmd',
-            text: cTarget.length > 50 ? cTarget.slice(0, 47) + '...' : cTarget,
-            diff: ''
-          });
-        }
-      }
-
-      readCount = seenReads.size;
-      editCount = seenEdits.size;
-
       return {
         status,
         statusText,
         readCount,
         editCount,
-        addLines,
-        delLines,
+        addLines: totalAdd,
+        delLines: totalDel,
         cmdCount,
         ask: askInfo,
         activities: activities.slice(-100),

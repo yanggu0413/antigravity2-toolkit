@@ -20,11 +20,14 @@ echo 请选择左上角品牌名显示方式：
 echo [1] 保持英文 Antigravity（推荐，美观原生）
 echo [2] 隐藏品牌名称
 echo [3] 启用品牌名称本地化
-set "CHOICE_VAL=1"
-set /p "CHOICE_VAL=请选择 [1/2/3] (直接按 Enter 默认选择 1): "
-set "BRAND_ARG=--brand-title english"
-if "%CHOICE_VAL%"=="2" set "BRAND_ARG=--brand-title hidden"
-if "%CHOICE_VAL%"=="3" set "BRAND_ARG=--brand-title translated"
+choice /C 123 /N /M "请选择 [1/2/3]: "
+if errorlevel 3 (
+    set "BRAND_ARG=--brand-title translated"
+) else if errorlevel 2 (
+    set "BRAND_ARG=--brand-title hidden"
+) else (
+    set "BRAND_ARG=--brand-title english"
+)
 
 echo.
 echo 正在安装简体中文本地化...

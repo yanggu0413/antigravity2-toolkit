@@ -89,6 +89,12 @@ async function runWidgetTests() {
     const domReadStep = agentStatusObserver.parseStepText('Explored 5 files');
     assert.strictEqual(domReadStep.type, 'read');
     assert.strictEqual(domReadStep.text, '5 files');
+    assert.strictEqual(domReadStep.count, 5);
+
+    const domAnalyzedStep = agentStatusObserver.parseStepText('Analyzed js test_cross_platform.js #L1-100');
+    assert.strictEqual(domAnalyzedStep.type, 'read');
+    assert.strictEqual(domAnalyzedStep.text, 'test_cross_platform.js #L1-100');
+    assert.strictEqual(domAnalyzedStep.fileName, 'test_cross_platform.js');
 
     const metrics = agentStatusObserver.extractMetrics([
       'Explored | 3 files',
@@ -98,12 +104,24 @@ async function runWidgetTests() {
       'Ran | npm test',
       'Ran | git status',
     ]);
-    assert.strictEqual(metrics.readCount, 1);
+    assert.strictEqual(metrics.readCount, 3);
     assert.strictEqual(metrics.editCount, 2); // 2 unique files: index.js, utils.js
     assert.strictEqual(metrics.addLines, 17);
     assert.strictEqual(metrics.delLines, 3);
     assert.strictEqual(metrics.cmdCount, 2);
     assert.strictEqual(metrics.activities.length, 6);
+
+    const complexMetrics = agentStatusObserver.extractMetrics([
+      'Explored 23 files, 1 folder, 7 searches',
+      'Ran node test/test_runner.js',
+      'Analyzed test_cross_platform.js #L1-100',
+      'Analyzed test_themes.js #L1-100',
+      'Analyzed test_patcher.js',
+      'Explored 23 files, 1 folder, 7 searches', // duplicate
+    ]);
+    assert.strictEqual(complexMetrics.readCount, 26); // 23 from group + 3 individual files
+    assert.strictEqual(complexMetrics.cmdCount, 1);
+    assert.strictEqual(complexMetrics.activities.length, 5); // 23 files, cmd, 3 analyzed files (duplicate suppressed)
 
     const statusAsk = agentStatusObserver.deduceAgentStatus({ hasAsk: true, isWorking: true });
     assert.strictEqual(statusAsk.status, 'ask');

@@ -209,13 +209,21 @@ function init(mainWin, options = {}) {
   isCollapsedState = Boolean(config.collapsed);
 
   // Compute screen workArea
-  let primaryWorkArea = { x: 0, y: 0, width: 1920, height: 1080 };
+  let targetWorkArea = { x: 0, y: 0, width: 1920, height: 1080 };
   let allDisplays = [];
   if (electron.screen) {
     try {
-      const primary = electron.screen.getPrimaryDisplay();
-      if (primary && primary.workArea) {
-        primaryWorkArea = primary.workArea;
+      let matchedDisplay = null;
+      if (mainWindow && typeof mainWindow.getBounds === 'function' && !mainWindow.isDestroyed()) {
+        if (typeof electron.screen.getDisplayMatching === 'function') {
+          matchedDisplay = electron.screen.getDisplayMatching(mainWindow.getBounds());
+        }
+      }
+      if (!matchedDisplay && typeof electron.screen.getPrimaryDisplay === 'function') {
+        matchedDisplay = electron.screen.getPrimaryDisplay();
+      }
+      if (matchedDisplay && matchedDisplay.workArea) {
+        targetWorkArea = matchedDisplay.workArea;
       }
       if (typeof electron.screen.getAllDisplays === 'function') {
         allDisplays = electron.screen.getAllDisplays();
@@ -224,7 +232,7 @@ function init(mainWin, options = {}) {
   }
 
   const customSize = config.size || null;
-  const defaultPos = calculateDefaultPosition(primaryWorkArea, isCollapsedState, customSize);
+  const defaultPos = calculateDefaultPosition(targetWorkArea, isCollapsedState, customSize);
   let x = defaultPos.x;
   let y = defaultPos.y;
 
@@ -241,6 +249,8 @@ function init(mainWin, options = {}) {
 
   const width = defaultPos.width;
   const height = defaultPos.height;
+
+  const preloadPath = path.join(__dirname, 'widget', 'widgetPreload.js');
 
   widgetWindow = new electron.BrowserWindow({
     width,
@@ -261,8 +271,10 @@ function init(mainWin, options = {}) {
     show: false,
     focusable: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      preload: fs.existsSync(preloadPath) ? preloadPath : undefined,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
       devTools: true,
     },
   });
@@ -373,11 +385,36 @@ function setupIpcHandlers(electron) {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       const bounds = widgetWindow.getBounds();
       const config = getFloatingWidgetConfig();
-      const normalHeight = (config.size && typeof config.size.height === 'number') ? config.size.height : 480;
-      const targetHeight = isCollapsedState ? 42 : normalHeight;
+      const targetHeight = isCollapsedState ? 42 : (config.height || 480);
+      let newY;
+      if (isCollapsedState) {
+        newY = bounds.y + (bounds.height - targetHeight);
+      } else {
+        newY = bounds.y - (targetHeight - bounds.height);
+        // Find screen display work area
+        let workAreaY = 0;
+        let workAreaHeight = 1080;
+        try {
+          if (electron && electron.screen && typeof electron.screen.getDisplayMatching === 'function') {
+            const display = electron.screen.getDisplayMatching(bounds);
+            if (display && display.workArea) {
+              workAreaY = display.workArea.y;
+              workAreaHeight = display.workArea.height;
+            }
+          }
+        } catch (_) {}
+        if (newY < workAreaY) {
+          // If expanding upward pushes above top of screen, anchor from current top downwards
+          newY = Math.max(workAreaY, bounds.y);
+        }
+        if (newY + targetHeight > workAreaY + workAreaHeight) {
+          newY = Math.max(workAreaY, workAreaY + workAreaHeight - targetHeight);
+        }
+      }
+
       widgetWindow.setBounds({
         x: bounds.x,
-        y: isCollapsedState ? (bounds.y + (bounds.height - targetHeight)) : (bounds.y - (targetHeight - bounds.height)),
+        y: newY,
         width: bounds.width,
         height: targetHeight,
       });

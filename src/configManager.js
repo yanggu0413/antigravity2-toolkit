@@ -54,6 +54,14 @@ function ensureCustomUiDirs() {
       fs.copyFileSync(srcWidgetHtml, destWidgetHtml);
     } catch (_) {}
   }
+  const destWidgetPreload = path.join(widgetDir, 'widgetPreload.js');
+  const srcWidgetPreload = path.join(__dirname, 'widget', 'widgetPreload.js');
+  if (!fs.existsSync(destWidgetPreload) && fs.existsSync(srcWidgetPreload)) {
+    try {
+      fs.copyFileSync(srcWidgetPreload, destWidgetPreload);
+    } catch (_) {}
+  }
+  paths.restoreOwnership(customUiDir);
 }
 
 function getConfig() {
@@ -94,6 +102,7 @@ function saveConfig(config) {
   ensureCustomUiDirs();
   const configPath = paths.getConfigPath();
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  paths.restoreOwnership(configPath);
 }
 
 function updateConfig(partial) {

@@ -526,9 +526,6 @@ function generatePreloadJs(options = {}) {
                         if (key.length > 15 && valNorm.includes(key)) {
                             newVal = newVal.split(key).join(translated);
                             break;
-                        } else if (key.length >= 18 && valNorm.length >= 18 && valLower.slice(0, 18) === key.slice(0, 18).toLowerCase()) {
-                            newVal = translated;
-                            break;
                         }
                     }
                 }
@@ -963,12 +960,12 @@ function resignAppOnMac(anyPath) {
     try {
       // Clear macOS Gatekeeper quarantine attribute to prevent "App damaged" warnings
       try {
-        child_process.execSync(`xattr -dr com.apple.quarantine "${targetApp}"`, {
+        child_process.execFileSync('xattr', ['-dr', 'com.apple.quarantine', targetApp], {
           stdio: 'ignore',
         });
       } catch (_) {}
 
-      const out = child_process.execSync(`codesign --force --deep --sign - "${targetApp}"`, {
+      const out = child_process.execFileSync('codesign', ['--force', '--deep', '--sign', '-', targetApp], {
         encoding: 'utf8',
         stdio: 'pipe',
       });

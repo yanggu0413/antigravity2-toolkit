@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const url = require('url');
 const paths = require('./paths');
 const configManager = require('./configManager');
 
@@ -775,6 +776,18 @@ function getThemeCss(name) {
  * Formats a wallpaper file path or web URL into a safe, valid CSS url(...) value.
  * Handles Windows drive paths, POSIX paths, encoding spaces, and special characters.
  */
+function sanitizeCssUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  return rawUrl
+    .replace(/[\r\n\t]/g, '')
+    .replace(/"/g, '%22')
+    .replace(/'/g, '%27')
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29')
+    .replace(/;/g, '%3B')
+    .replace(/[{}]/g, '');
+}
+
 function formatWallpaperUrl(imagePath) {
   if (!imagePath || typeof imagePath !== 'string' || imagePath.trim().length === 0) {
     return 'none';
@@ -783,22 +796,29 @@ function formatWallpaperUrl(imagePath) {
   // Strip leading and trailing quotes (common when copying paths on Windows)
   trimmed = trimmed.replace(/^["']+|["']+$/g, '').trim();
 
-  // If already a web URL or data URL, return as-is
-  if (
-    trimmed.startsWith('http://') ||
-    trimmed.startsWith('https://') ||
-    trimmed.startsWith('data:')
-  ) {
-    return `url("${trimmed}")`;
+  // If already a web URL
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return `url("${sanitizeCssUrl(trimmed)}")`;
   }
 
-  // If it's a local file, convert to Base64 Data URL so Chromium (serving over HTTPS)
-  // will NOT block it with "Not allowed to load local resource"
+  // If already a safe data: image URL
+  if (trimmed.startsWith('data:image/')) {
+    if (/^data:image\/[a-zA-Z0-9\+\-\.]+;base64,[A-Za-z0-9+/=]+$/.test(trimmed)) {
+      return `url("${trimmed}")`;
+    }
+  }
+
+  // If it's a file URL or filesystem path
   let localPath = trimmed;
-  if (localPath.startsWith('file:///')) {
-    localPath = decodeURI(localPath.slice(8));
-  } else if (localPath.startsWith('file://')) {
-    localPath = decodeURI(localPath.slice(7));
+  if (trimmed.startsWith('file://')) {
+    try {
+      localPath = url.fileURLToPath(trimmed);
+    } catch (_) {
+      localPath = decodeURI(trimmed.replace(/^file:\/\//, ''));
+      if (process.platform !== 'win32' && !localPath.startsWith('/')) {
+        localPath = '/' + localPath;
+      }
+    }
   }
 
   if (fs.existsSync(localPath)) {
@@ -820,17 +840,22 @@ function formatWallpaperUrl(imagePath) {
   }
 
   // Fallback to normalized file URL if file is not directly readable
-  const normalized = trimmed.replace(/\\/g, '/');
   let fileUrl;
-  if (/^[a-zA-Z]:\//.test(normalized)) {
-    fileUrl = `file:///${encodeURI(normalized).replace(/#/g, '%23')}`;
-  } else if (normalized.startsWith('/')) {
-    fileUrl = `file://${encodeURI(normalized).replace(/#/g, '%23')}`;
-  } else {
-    const resolved = path.resolve(trimmed).replace(/\\/g, '/');
-    fileUrl = `file:///${encodeURI(resolved).replace(/#/g, '%23')}`;
+  try {
+    const resolved = path.resolve(localPath);
+    fileUrl = url.pathToFileURL(resolved).href;
+  } catch (_) {
+    const normalized = trimmed.replace(/\\/g, '/');
+    if (/^[a-zA-Z]:\//.test(normalized)) {
+      fileUrl = `file:///${encodeURI(normalized).replace(/#/g, '%23')}`;
+    } else if (normalized.startsWith('/')) {
+      fileUrl = `file://${encodeURI(normalized).replace(/#/g, '%23')}`;
+    } else {
+      const resolved = path.resolve(trimmed).replace(/\\/g, '/');
+      fileUrl = `file:///${encodeURI(resolved).replace(/#/g, '%23')}`;
+    }
   }
-  return `url("${fileUrl}")`;
+  return `url("${sanitizeCssUrl(fileUrl)}")`;
 }
 
 /**
@@ -855,20 +880,26 @@ function applyTheme(name, options = {}) {
     wallpaperConfig?.imagePath;
   if (shouldApplyWallpaper) {
     const imgUrl = formatWallpaperUrl(wallpaperConfig?.imagePath);
-    const opacity = wallpaperConfig?.opacity !== undefined ? wallpaperConfig.opacity : 0.35;
-    const blur = wallpaperConfig?.blur !== undefined ? `${wallpaperConfig.blur}px` : '0px';
+    const rawOpacity = wallpaperConfig?.opacity !== undefined ? wallpaperConfig.opacity : 0.35;
+    const numOpacity = parseFloat(rawOpacity);
+    const safeOpacity = isNaN(numOpacity) ? 0.35 : Math.max(0, Math.min(1, numOpacity));
+
+    const rawBlur = wallpaperConfig?.blur !== undefined ? wallpaperConfig.blur : 0;
+    const numBlur = parseFloat(rawBlur);
+    const safeBlur = isNaN(numBlur) ? 0 : Math.max(0, Math.min(100, numBlur));
+    const blurStr = `${safeBlur}px`;
 
     const wallpaperOverride = `
 /* --- Dynamic Wallpaper Settings --- */
 :root {
-  --ag-wallpaper-opacity: ${opacity} !important;
-  --ag-wallpaper-blur: ${blur} !important;
+  --ag-wallpaper-opacity: ${safeOpacity} !important;
+  --ag-wallpaper-blur: ${blurStr} !important;
 }
 
 body::before {
   background-image: ${imgUrl} !important;
-  opacity: ${opacity} !important;
-  filter: blur(${blur}) !important;
+  opacity: ${safeOpacity} !important;
+  filter: blur(${blurStr}) !important;
 }
 `;
     finalCss = finalCss + '\n' + wallpaperOverride;
@@ -882,6 +913,7 @@ body::before {
   // Write to custom-ui/theme.css (which triggers the hot-reloader)
   const themeCssPath = paths.getThemeCssPath();
   fs.writeFileSync(themeCssPath, finalCss, 'utf8');
+  paths.restoreOwnership(themeCssPath);
 
   // Update config
   const updateData = {
@@ -916,6 +948,7 @@ function createTheme(name, cssContent, metadata = {}) {
   const themesDir = paths.getThemesDir();
   const filePath = path.join(themesDir, `${cleanName}.css`);
   fs.writeFileSync(filePath, cssContent, 'utf8');
+  paths.restoreOwnership(filePath);
   return { success: true, name: cleanName, path: filePath };
 }
 

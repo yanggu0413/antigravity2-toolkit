@@ -842,13 +842,21 @@
     pillEdit.onclick = () => setFilter(currentFilter === 'edit' ? 'all' : 'edit');
     pillCmd.onclick = () => setFilter(currentFilter === 'cmd' ? 'all' : 'cmd');
 
+    const bridge = window.agWidgetBridge || null;
     let ipc = null;
-    try {
-      if (window.require) {
-        const electron = window.require('electron');
-        ipc = electron.ipcRenderer;
-      }
-    } catch (_) {}
+    if (bridge) {
+      ipc = {
+        send: (ch, ...args) => bridge.send(ch, ...args),
+        on: (ch, fn) => bridge.on(ch, fn),
+      };
+    } else {
+      try {
+        if (window.require) {
+          const electron = window.require('electron');
+          ipc = electron.ipcRenderer;
+        }
+      } catch (_) {}
+    }
 
     function renderActivities() {
       const acts = state.activities || [];
@@ -884,10 +892,20 @@
           } else if (act.type === 'read') {
             badgeClass = 'badge-read';
             tagText = 'READ';
-            const mCount = act.text.match(/^(\d+)\s+files?$/i);
+            const mCount = act.text.match(/^(\d+)\s+files?(?:,\s*(.+))?$/i);
             if (mCount) {
-              displayText = `探索 ${mCount[1]} 個檔案`;
-            } else if (!act.text.startsWith('探索') && !act.text.startsWith('Explored')) {
+              const num = mCount[1];
+              const extra = mCount[2] ? ` (${mCount[2]})` : '';
+              displayText = `探索 ${num} 個檔案${extra}`;
+            } else if (act.text.startsWith('分析 ') || act.text.startsWith('探索 ')) {
+              displayText = act.text;
+            } else if (act.text.startsWith('Analyzed ') || act.text.startsWith('Analyzing ')) {
+              displayText = `分析 ${act.text.replace(/^(?:Analyzed|Analyzing)\s+/i, '')}`;
+            } else if (act.text.startsWith('Explored ') || act.text.startsWith('Exploring ')) {
+              displayText = `探索 ${act.text.replace(/^(?:Explored|Exploring)\s+/i, '')}`;
+            } else if (/\.[a-zA-Z0-9]+(?:\s*#L\d+(?:-\d+)?)?$/.test(act.text)) {
+              displayText = `分析 ${act.text}`;
+            } else {
               displayText = `探索 ${act.text}`;
             }
           }
@@ -1061,7 +1079,9 @@
       } catch (_) {}
 
       try {
-        if (window.require) {
+        if (bridge && typeof bridge.setZoomFactor === 'function') {
+          bridge.setZoomFactor(currentZoom);
+        } else if (window.require) {
           const electron = window.require('electron');
           if (electron && electron.webFrame && typeof electron.webFrame.setZoomFactor === 'function') {
             electron.webFrame.setZoomFactor(currentZoom);

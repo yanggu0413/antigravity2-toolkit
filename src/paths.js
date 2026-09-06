@@ -26,15 +26,51 @@ function getRealUserHome() {
   return os.homedir();
 }
 
+function restoreOwnership(targetPath) {
+  if (process.platform === 'win32' || !targetPath || !fs.existsSync(targetPath)) {
+    return;
+  }
+  const sudoUid = process.env.SUDO_UID;
+  if (!sudoUid) return;
+  const uid = parseInt(sudoUid, 10);
+  const gid = parseInt(process.env.SUDO_GID || sudoUid, 10);
+  if (isNaN(uid) || isNaN(gid)) return;
+
+  try {
+    const stat = fs.statSync(targetPath);
+    if (stat.uid !== uid || stat.gid !== gid) {
+      fs.chownSync(targetPath, uid, gid);
+    }
+    if (stat.isDirectory()) {
+      const entries = fs.readdirSync(targetPath);
+      for (const entry of entries) {
+        restoreOwnership(path.join(targetPath, entry));
+      }
+    }
+  } catch (_) {}
+}
+
 function hasAntigravityResources(candidate) {
   if (!candidate) return false;
   return (
+    // Standard resources dir (Windows / Linux / manual)
     fs.existsSync(path.join(candidate, 'resources', 'app.asar')) ||
-    fs.existsSync(path.join(candidate, 'app.asar')) ||
-    fs.existsSync(path.join(candidate, 'Contents', 'Resources', 'app.asar')) ||
-    fs.existsSync(path.join(candidate, 'resources', 'app', 'product.json')) ||
     fs.existsSync(path.join(candidate, 'resources', 'app.asar.bak')) ||
-    fs.existsSync(path.join(candidate, 'resources', 'app.asar.dev-disabled'))
+    fs.existsSync(path.join(candidate, 'resources', 'app.asar.dev-disabled')) ||
+    fs.existsSync(path.join(candidate, 'resources', 'app', 'product.json')) ||
+    fs.existsSync(path.join(candidate, 'resources', 'app', 'package.json')) ||
+    // macOS Contents/Resources
+    fs.existsSync(path.join(candidate, 'Contents', 'Resources', 'app.asar')) ||
+    fs.existsSync(path.join(candidate, 'Contents', 'Resources', 'app.asar.bak')) ||
+    fs.existsSync(path.join(candidate, 'Contents', 'Resources', 'app.asar.dev-disabled')) ||
+    fs.existsSync(path.join(candidate, 'Contents', 'Resources', 'app', 'product.json')) ||
+    fs.existsSync(path.join(candidate, 'Contents', 'Resources', 'app', 'package.json')) ||
+    // Candidate itself is the resources dir
+    fs.existsSync(path.join(candidate, 'app.asar')) ||
+    fs.existsSync(path.join(candidate, 'app.asar.bak')) ||
+    fs.existsSync(path.join(candidate, 'app.asar.dev-disabled')) ||
+    fs.existsSync(path.join(candidate, 'app', 'product.json')) ||
+    fs.existsSync(path.join(candidate, 'app', 'package.json'))
   );
 }
 
@@ -215,7 +251,35 @@ function getExePath(manualDir = null) {
   }
 
   if (process.env.ANTIGRAVITY_RESOURCES_DIR) {
-    return path.join(path.resolve(process.env.ANTIGRAVITY_RESOURCES_DIR), '..', 'Antigravity.exe');
+    const resDir = path.resolve(process.env.ANTIGRAVITY_RESOURCES_DIR);
+    if (process.platform === 'win32') {
+      const c1 = path.join(resDir, '..', 'Antigravity.exe');
+      const c2 = path.join(resDir, '..', 'antigravity.exe');
+      if (fs.existsSync(c1)) return c1;
+      if (fs.existsSync(c2)) return c2;
+      return c1;
+    }
+    if (process.platform === 'darwin') {
+      const macCandidates = [
+        path.join(resDir, '..', 'MacOS', 'Antigravity'),
+        path.join(resDir, '..', 'MacOS', 'antigravity'),
+        path.join(resDir, '..', 'MacOS', 'Electron'),
+      ];
+      for (const c of macCandidates) {
+        if (fs.existsSync(c)) return c;
+      }
+      return macCandidates[0];
+    }
+    const linuxCandidates = [
+      path.join(resDir, '..', 'antigravity'),
+      path.join(resDir, '..', 'Antigravity'),
+      '/usr/bin/antigravity',
+      '/usr/local/bin/antigravity',
+    ];
+    for (const c of linuxCandidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return linuxCandidates[0];
   }
 
   const installDir = detectInstallationDir(manualDir);
@@ -346,8 +410,19 @@ function checkWritePermissions(manualDir = null) {
 
   try {
     if (fs.existsSync(targetDir)) {
-      fs.accessSync(targetDir, fs.constants.W_OK | fs.constants.R_OK);
-      resourcesWritable = true;
+      if (process.platform === 'win32') {
+        const testFile = path.join(targetDir, `.ag-perm-test-${Date.now()}.tmp`);
+        try {
+          fs.writeFileSync(testFile, 'test');
+          fs.unlinkSync(testFile);
+          resourcesWritable = true;
+        } catch (_) {
+          resourcesWritable = false;
+        }
+      } else {
+        fs.accessSync(targetDir, fs.constants.W_OK | fs.constants.R_OK);
+        resourcesWritable = true;
+      }
     }
   } catch (_) {
     resourcesWritable = false;
@@ -364,21 +439,29 @@ function checkWritePermissions(manualDir = null) {
 
   const writable = resourcesWritable && asarWritable;
   const isUnix = process.platform === 'darwin' || process.platform === 'linux';
-  const needsElevation = !writable && isUnix;
+  const needsElevation = !writable;
+
+  let hint = null;
+  if (needsElevation) {
+    if (isUnix) {
+      hint = `權限不足：無法寫入 ${targetDir}。請使用 'sudo' 重新執行此指令（例如：sudo ./啟動工具箱.sh 或 sudo ag-toolkit ...）。`;
+    } else {
+      hint = `權限不足：無法寫入 ${targetDir}。Antigravity 安裝於系統保護目錄，請以「系統管理員身分 (Run as Administrator)」開啟 PowerShell 或 CMD 終端機後再重新執行。`;
+    }
+  }
 
   return {
     writable,
     resourcesWritable,
     asarWritable,
     needsElevation,
-    hint: needsElevation
-      ? `權限不足：無法寫入 ${targetDir}。請使用 'sudo' 重新執行此指令（例如：sudo ./啟動工具箱.sh 或 sudo ag-toolkit ...）。`
-      : null,
+    hint,
   };
 }
 
 module.exports = {
   getRealUserHome,
+  restoreOwnership,
   detectInstallationDir,
   getResourcesDir,
   getExePath,

@@ -121,18 +121,45 @@ function killProcesses(timeoutMs = 3000) {
       execSync('taskkill /F /IM language_server.exe /T', { stdio: 'ignore' });
     } catch (_) {}
   } else {
+    // 1. Initial SIGTERM to identified processes
     const procs = getRunningProcesses();
     for (const proc of procs) {
       try {
         process.kill(proc.pid, 'SIGTERM');
       } catch (_) {}
     }
+    // Pattern termination for both main app and helper processes without short-circuiting
     try {
-      execSync('pkill -x antigravity || pkill -x Antigravity || true', { stdio: 'ignore' });
+      execSync('pkill -TERM -f -i "antigravity" || true', { stdio: 'ignore' });
     } catch (_) {}
     try {
-      execSync('pkill -x language_server || true', { stdio: 'ignore' });
+      execSync('pkill -TERM -f -i "language_server" || true', { stdio: 'ignore' });
     } catch (_) {}
+
+    // Grace period for graceful exit
+    const termDeadline = Date.now() + Math.min(1500, timeoutMs / 2);
+    while (Date.now() < termDeadline) {
+      sleepSync(100);
+      if (!isAntigravityRunning()) {
+        return true;
+      }
+    }
+
+    // 2. Escalate to SIGKILL if processes remain
+    if (isAntigravityRunning()) {
+      const remaining = getRunningProcesses();
+      for (const proc of remaining) {
+        try {
+          process.kill(proc.pid, 'SIGKILL');
+        } catch (_) {}
+      }
+      try {
+        execSync('pkill -9 -f -i "antigravity" || true', { stdio: 'ignore' });
+      } catch (_) {}
+      try {
+        execSync('pkill -9 -f -i "language_server" || true', { stdio: 'ignore' });
+      } catch (_) {}
+    }
   }
 
   const start = Date.now();
@@ -149,11 +176,17 @@ function killProcesses(timeoutMs = 3000) {
 function launchApp(manualDir = null) {
   const exePath = paths.getExePath(manualDir);
   const isMac = process.platform === 'darwin';
+  const sudoUser = process.env.SUDO_USER;
+  const isElevatedUnix = process.platform !== 'win32' && sudoUser && typeof process.getuid === 'function' && process.getuid() === 0;
 
   if (isMac) {
     const installDir = paths.detectInstallationDir(manualDir);
     if (installDir && installDir.endsWith('.app')) {
-      const child = spawn('open', ['-a', installDir], {
+      const spawnCmd = isElevatedUnix ? 'sudo' : 'open';
+      const spawnArgs = isElevatedUnix
+        ? ['-u', sudoUser, 'open', '-a', installDir]
+        : ['-a', installDir];
+      const child = spawn(spawnCmd, spawnArgs, {
         detached: true,
         stdio: 'ignore',
       });
@@ -164,6 +197,15 @@ function launchApp(manualDir = null) {
 
   if (!fs.existsSync(exePath)) {
     throw new Error(`Antigravity executable not found at: ${exePath}`);
+  }
+
+  if (isElevatedUnix) {
+    const child = spawn('sudo', ['-u', sudoUser, exePath], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    return child.pid || 0;
   }
 
   const child = spawn(exePath, [], {
