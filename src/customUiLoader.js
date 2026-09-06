@@ -84,16 +84,26 @@ function getBrowserWindowOptions(isLight, foregroundColor) {
   };
 
   const material = (config.backgroundMaterial || 'mica').toLowerCase();
-  if (isWindows && (material === 'mica' || material === 'acrylic')) {
-    options.backgroundMaterial = material;
-    options.backgroundColor = '#00000000';
-    options.titleBarOverlay = {
-      color: '#00000000',
-      symbolColor: symbolColor,
-      height: 30,
-    };
+  if (isWindows) {
+    if (material === 'mica' || material === 'acrylic') {
+      options.backgroundMaterial = material;
+      options.backgroundColor = '#00000000';
+      options.titleBarOverlay = {
+        color: '#00000000',
+        symbolColor: symbolColor,
+        height: 30,
+      };
+    } else {
+      // Non-mica default (e.g. custom wallpaper or default theme)
+      options.backgroundColor = isLight ? '#FAFAFA' : '#131313';
+      options.titleBarOverlay = {
+        color: options.backgroundColor,
+        symbolColor: symbolColor,
+        height: 30,
+      };
+    }
   } else {
-    // Non-mica default
+    // Non-Windows default
     options.backgroundColor = isLight ? '#FAFAFA' : '#131313';
   }
 

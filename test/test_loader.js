@@ -48,6 +48,18 @@ async function runLoaderTests() {
     }
     console.log('  ✔ getBrowserWindowOptions toggles Acrylic material and DevTools config');
 
+    configManager.saveConfig({
+      backgroundMaterial: 'none',
+      devTools: true,
+    });
+    const optsNoneLight = getBrowserWindowOptions(true, '#383A42');
+    if (process.platform === 'win32') {
+      assert.strictEqual(optsNoneLight.backgroundColor, '#FAFAFA');
+      assert.strictEqual(optsNoneLight.titleBarOverlay.color, '#FAFAFA');
+      assert.strictEqual(optsNoneLight.titleBarOverlay.symbolColor, '#383A42');
+    }
+    console.log('  ✔ getBrowserWindowOptions computes non-mica Light mode titleBarOverlay correctly');
+
     // 2. Test applyCssToFrame with mock WebFrameMain
     let executedScript = null;
     const mockFrame = {
