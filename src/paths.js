@@ -1,0 +1,320 @@
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const child_process = require('child_process');
+
+/**
+ * Resolves Antigravity resource directories, configuration paths,
+ * installation directories, and user custom-ui storage directories.
+ * Supports multi-platform auto-detection (Windows, macOS, Linux),
+ * registry queries, and environment variable overrides for flexible testing.
+ */
+
+let cachedInstallDir = null;
+
+function hasAntigravityResources(candidate) {
+  if (!candidate) return false;
+  return (
+    fs.existsSync(path.join(candidate, 'resources', 'app.asar')) ||
+    fs.existsSync(path.join(candidate, 'app.asar')) ||
+    fs.existsSync(path.join(candidate, 'Contents', 'Resources', 'app.asar')) ||
+    fs.existsSync(path.join(candidate, 'resources', 'app', 'product.json')) ||
+    fs.existsSync(path.join(candidate, 'resources', 'app.asar.bak')) ||
+    fs.existsSync(path.join(candidate, 'resources', 'app.asar.dev-disabled'))
+  );
+}
+
+function detectInstallationDir(manualDir = null) {
+  if (manualDir) {
+    let resolved = path.resolve(manualDir);
+    if (fs.existsSync(resolved)) {
+      const stat = fs.statSync(resolved);
+      if (stat.isFile() && resolved.endsWith('app.asar')) {
+        resolved = path.dirname(resolved);
+      }
+      return resolved;
+    }
+  }
+
+  if (cachedInstallDir && fs.existsSync(cachedInstallDir)) {
+    return cachedInstallDir;
+  }
+
+  if (process.env.ANTIGRAVITY_INSTALL_DIR && fs.existsSync(process.env.ANTIGRAVITY_INSTALL_DIR)) {
+    cachedInstallDir = path.resolve(process.env.ANTIGRAVITY_INSTALL_DIR);
+    return cachedInstallDir;
+  }
+
+  if (process.env.ANTIGRAVITY_HOME && fs.existsSync(process.env.ANTIGRAVITY_HOME)) {
+    cachedInstallDir = path.resolve(process.env.ANTIGRAVITY_HOME);
+    return cachedInstallDir;
+  }
+
+  const candidates = [];
+  const seenCandidates = new Set();
+  const addCandidate = (candidate) => {
+    if (!candidate) return;
+    try {
+      const normalized = path.resolve(candidate);
+      const key = normalized.toLowerCase();
+      if (!seenCandidates.has(key)) {
+        candidates.push(normalized);
+        seenCandidates.add(key);
+      }
+    } catch (_) {}
+  };
+
+  const isWindows = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+  const isLinux = process.platform === 'linux';
+
+  if (isWindows) {
+    const registryRoots = [
+      'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+      'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+      'HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+    ];
+    for (const root of registryRoots) {
+      try {
+        const output = child_process.execSync(`reg query "${root}" /s /f Antigravity /d`, {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        for (const line of output.split(/\r?\n/)) {
+          const match = line.match(/^\s*(InstallLocation|DisplayIcon)\s+REG_\w+\s+(.+)$/i);
+          if (!match) continue;
+          let value = match[2].trim().replace(/^"|"$/g, '');
+          if (/Antigravity\.exe/i.test(value)) {
+            value = path.dirname(value);
+          }
+          addCandidate(value);
+        }
+      } catch (_) {}
+    }
+
+    const localAppdata = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    addCandidate(path.join(localAppdata, 'Programs', 'antigravity'));
+    addCandidate(path.join(localAppdata, 'Programs', 'Antigravity'));
+
+    const driveLetters = ['C', 'D', 'E', 'F'];
+    for (const drive of driveLetters) {
+      addCandidate(`${drive}:\\Programs\\Antigravity`);
+      addCandidate(`${drive}:\\Antigravity`);
+      addCandidate(`${drive}:\\Program Files\\Antigravity`);
+      addCandidate(`${drive}:\\Program Files (x86)\\Antigravity`);
+    }
+  } else if (isMac) {
+    addCandidate('/Applications/Antigravity.app');
+    addCandidate(path.join(os.homedir(), 'Applications', 'Antigravity.app'));
+  } else if (isLinux) {
+    addCandidate('/opt/Antigravity');
+    addCandidate('/opt/antigravity');
+    addCandidate('/usr/lib/antigravity');
+    addCandidate('/usr/lib/Antigravity');
+    addCandidate('/usr/share/antigravity');
+    addCandidate('/usr/share/Antigravity');
+    addCandidate('/usr/local/lib/antigravity');
+    addCandidate('/usr/local/share/antigravity');
+
+    const homeDir = os.homedir();
+    addCandidate(path.join(homeDir, '.local', 'share', 'antigravity'));
+    addCandidate(path.join(homeDir, '.local', 'share', 'Antigravity'));
+    addCandidate(path.join(homeDir, '.local', 'lib', 'antigravity'));
+    addCandidate(path.join(homeDir, '.local', 'lib', 'Antigravity'));
+    addCandidate(path.join(homeDir, '.antigravity'));
+    addCandidate(path.join(homeDir, 'antigravity'));
+    addCandidate(path.join(homeDir, 'Antigravity'));
+
+    try {
+      const binPath = child_process.execSync('which antigravity 2>/dev/null || which Antigravity 2>/dev/null', {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      if (binPath && fs.existsSync(binPath)) {
+        const realBin = fs.realpathSync(binPath);
+        addCandidate(path.dirname(realBin));
+        addCandidate(path.dirname(path.dirname(realBin)));
+      }
+    } catch (_) {}
+  }
+
+  for (const p of candidates) {
+    if (fs.existsSync(p) && hasAntigravityResources(p)) {
+      cachedInstallDir = p;
+      return p;
+    }
+  }
+
+  // Fallback defaults
+  if (isWindows) {
+    const localAppdata = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    return path.join(localAppdata, 'Programs', 'antigravity');
+  }
+  if (isMac) {
+    return '/Applications/Antigravity.app';
+  }
+  return '/opt/antigravity';
+}
+
+function getResourcesDir(manualDir = null) {
+  if (process.env.ANTIGRAVITY_RESOURCES_DIR) {
+    return path.resolve(process.env.ANTIGRAVITY_RESOURCES_DIR);
+  }
+
+  const installDir = detectInstallationDir(manualDir);
+
+  if (process.platform === 'darwin') {
+    if (installDir.endsWith('Contents/Resources') || installDir.endsWith('Contents\\Resources')) {
+      return installDir;
+    }
+    const macRes = path.join(installDir, 'Contents', 'Resources');
+    if (fs.existsSync(macRes)) return macRes;
+  }
+
+  if (installDir.endsWith('resources') || installDir.endsWith('resources\\')) {
+    return installDir;
+  }
+
+  const standardRes = path.join(installDir, 'resources');
+  if (fs.existsSync(standardRes)) {
+    return standardRes;
+  }
+
+  if (fs.existsSync(path.join(installDir, 'app.asar'))) {
+    return installDir;
+  }
+
+  return standardRes;
+}
+
+function getExePath(manualDir = null) {
+  if (process.env.ANTIGRAVITY_EXE_PATH) {
+    return path.resolve(process.env.ANTIGRAVITY_EXE_PATH);
+  }
+
+  if (process.env.ANTIGRAVITY_RESOURCES_DIR) {
+    return path.join(path.resolve(process.env.ANTIGRAVITY_RESOURCES_DIR), '..', 'Antigravity.exe');
+  }
+
+  const installDir = detectInstallationDir(manualDir);
+
+  if (process.platform === 'win32') {
+    const exeCandidates = [
+      path.join(installDir, 'Antigravity.exe'),
+      path.join(installDir, 'antigravity.exe'),
+    ];
+    for (const c of exeCandidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return exeCandidates[0];
+  }
+
+  if (process.platform === 'darwin') {
+    const macExe = path.join(installDir, 'Contents', 'MacOS', 'Antigravity');
+    if (fs.existsSync(macExe)) return macExe;
+    return installDir;
+  }
+
+  const linuxCandidates = [
+    path.join(installDir, 'antigravity'),
+    path.join(installDir, 'Antigravity'),
+    '/usr/bin/antigravity',
+  ];
+  for (const c of linuxCandidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return linuxCandidates[0];
+}
+
+function getAsarPath(manualDir = null) {
+  return path.join(getResourcesDir(manualDir), 'app.asar');
+}
+
+function getAsarBackupPath(manualDir = null) {
+  return path.join(getResourcesDir(manualDir), 'app.asar.bak');
+}
+
+function getDevAppDir(manualDir = null) {
+  return path.join(getResourcesDir(manualDir), 'app');
+}
+
+function getAsarDisabledPath(manualDir = null) {
+  return path.join(getResourcesDir(manualDir), 'app.asar.dev-disabled');
+}
+
+function getAsarUnpackedDir(manualDir = null) {
+  return path.join(getResourcesDir(manualDir), 'app.asar.unpacked');
+}
+
+function getAsarUnpackedBackupDir(manualDir = null) {
+  return path.join(getResourcesDir(manualDir), 'app.asar.unpacked.bak');
+}
+
+function getCustomUiDir() {
+  if (process.env.ANTIGRAVITY_CUSTOM_UI_DIR) {
+    return path.resolve(process.env.ANTIGRAVITY_CUSTOM_UI_DIR);
+  }
+  return path.join(os.homedir(), '.gemini', 'antigravity', 'custom-ui');
+}
+
+function getConfigPath() {
+  return path.join(getCustomUiDir(), 'config.json');
+}
+
+function getThemeCssPath() {
+  return path.join(getCustomUiDir(), 'theme.css');
+}
+
+function getThemesDir() {
+  return path.join(getCustomUiDir(), 'themes');
+}
+
+function getAssetsDir() {
+  return path.join(getCustomUiDir(), 'assets');
+}
+
+function checkInstallation(manualDir = null) {
+  const resourcesDir = getResourcesDir(manualDir);
+  const asarPath = getAsarPath(manualDir);
+  const devAppDir = getDevAppDir(manualDir);
+  const asarDisabledPath = getAsarDisabledPath(manualDir);
+  const backupPath = getAsarBackupPath(manualDir);
+  const exePath = getExePath(manualDir);
+
+  const resourcesExist = fs.existsSync(resourcesDir);
+  const asarExists = fs.existsSync(asarPath);
+  const devAppExists = fs.existsSync(devAppDir);
+  const asarDisabledExists = fs.existsSync(asarDisabledPath);
+  const backupExists = fs.existsSync(backupPath);
+  const exeExists = fs.existsSync(exePath);
+
+  return {
+    valid: resourcesExist && (asarExists || devAppExists || asarDisabledExists || backupExists),
+    resourcesDir,
+    exePath,
+    exeExists,
+    asarExists,
+    devAppExists,
+    asarDisabledExists,
+    backupExists,
+    isDevMode: devAppExists,
+  };
+}
+
+module.exports = {
+  detectInstallationDir,
+  getResourcesDir,
+  getExePath,
+  getAsarPath,
+  getAsarBackupPath,
+  getDevAppDir,
+  getAsarDisabledPath,
+  getAsarUnpackedDir,
+  getAsarUnpackedBackupDir,
+  getCustomUiDir,
+  getConfigPath,
+  getThemeCssPath,
+  getThemesDir,
+  getAssetsDir,
+  checkInstallation,
+};

@@ -1,0 +1,182 @@
+# Antigravity 2 全能增強工具箱 (`antigravity2-toolkit` / `ag2-toolkit`)
+
+> **桌布美化 ‧ 繁簡中文化 ‧ 100% 保持官方原生深色/淺色主題與穩定性**  
+> 專為 **Google Antigravity 2.0+** 設計的一站式開源增強工具箱，完美整合**自訂桌布引擎**與**深度中文本地化語言包**。
+
+---
+
+## 🌟 核心特色 (Key Features)
+
+### 1. 🎨 自訂背景桌布 (Wallpaper Engine)
+- **100% 保持官方原生深色 / 淺色主題**：完全不更動官方語法高亮、字型、配色與對話層次。
+- **右側代碼編輯器 100% 純色不穿透**：代碼編輯區與 Diff 視窗保持純色不透明，代碼清晰易讀，背景絕不干擾閱讀。
+- **頂部對話框與對話泡泡完美貼合**：Prompt 輸入與對話泡泡尺寸隨內容貼合，兼具毛玻璃質感與清爽外觀。
+- **⚡ 零重啟 Hot-Reload**：修改圖片、透明度或模糊度即時在運行中的 Antigravity 視窗生效。
+- **支援 Windows 11 原生 Mica / Acrylic 特效**：真正調用 Electron 原生背景材質。
+
+### 2. 🌐 深度中文在地化 (Chinese Localization)
+- **繁體中文 (`zh-TW`) 與簡體中文 (`zh-CN`) 完整支援**：字典收錄逾 1,100+ 條精校專業術語。
+- **全方位無死角覆蓋**：主界面、頂部原生系統選單、系統匣 (Tray) 右鍵選單、載入中動畫、更新彈窗、詳細設定面板、MCP 知識庫、新手引導等。
+- **🛡️ 物理禁區隔離防護 (Enterprise Grade)**：
+  - 嚴格跳過使用者輸入框（Prompt 輸入框、搜尋框、Composer、ProseMirror、Lexical 等）。
+  - 嚴格跳過代碼與終端區（Monaco Editor、XTerm、CodeBlock 等）。
+  - 嚴格跳過 Agent 思考推理過程（Thinking / CoT / Reasoning）。
+  - 嚴格跳過對話內文 Markdown 渲染區。
+- **靈活品牌名設定**：可選擇保留原生英文 `Antigravity`、隱藏品牌名或在地化顯示。
+
+### 3. 🛡️ 安全無損與開發者友好
+- **單次打包雙重注入**：桌布增強與中文化可在單次 ASAR 解包/重包中完成，零多餘解包開銷。
+- **🛠️ Folder 開發模式 (`resources/app/`)**：支援免重新打包直接修改代碼與字典，修改即時生效。
+- **🔄 一鍵無損還原**：自動備份 `app.asar.bak` 與 `app.asar.unpacked.bak`，隨時可完全恢復為官方原廠乾淨狀態。
+- **macOS 自動重簽名**：內建 Ad-hoc 深度代碼重簽名，徹底杜絕損壞無法開啟問題。
+- **完整向下相容**：同時相容 `ag-themer` 與 `localization_engine.js` 舊版呼叫語法。
+
+---
+
+## 🚀 快速上手 (Quick Start)
+
+### 方法 A：雙擊一鍵腳本 (Windows / macOS / Linux)
+
+在專案目錄中，直接雙擊對應腳本即可：
+- **開啟全功能互動選單**：
+  - Windows: `雙擊啟動工具箱.bat` 或 `双击启动工具箱.bat`
+- **一鍵安裝繁體中文**：
+  - Windows: `雙擊安裝繁體中文.bat`
+  - macOS: `雙擊安裝繁體中文.command`
+  - Linux: `./安裝繁體中文_Linux.sh`
+- **一鍵安裝簡體中文**：
+  - Windows: `双击安装简体中文.bat`
+  - macOS: `双击安装简体中文.command`
+  - Linux: `./安装简体中文_Linux.sh`
+- **一鍵還原官方英文**：
+  - Windows: `雙擊解除安裝還原官方英文.bat`
+  - macOS: `雙擊解除安裝還原官方英文.command`
+  - Linux: `./解除安裝還原官方英文_Linux.sh`
+
+---
+
+### 方法 B：互動式終端選單 (Interactive Menu)
+
+在終端中執行：
+```bash
+npm start
+# 或
+node bin/ag-toolkit.js
+```
+選單提供清晰直覺的控制面板：
+```text
+  目前系統狀態：
+    修補模式:    ASAR 已修補
+    程序狀態:    運行中 (7 個程序)
+    原廠備份:    已安全備份 (app.asar.bak)
+    中文化狀態:  ✔ 已安裝 繁體中文 (zh-TW) [保留英文 Antigravity]
+    桌布狀態:    ✔ 已啟用自訂背景
+    圖片路徑:    C:\path\to\wallpaper.png
+    透明度:      0.35 (35%)
+    模糊度:      0px
+```
+
+---
+
+## 📖 CLI 命令行指南 (Command Reference)
+
+```bash
+# 查看完整說明
+ag-toolkit --help
+
+# 檢視目前安裝、桌布與中文化狀態
+ag-toolkit status
+
+# 設定桌布 (透明度 0.35，清晰高清)
+ag-toolkit set "C:\path\to\wallpaper.png" -o 0.35 -b 0
+
+# 清除桌布恢復官方純色外觀
+ag-toolkit clear
+
+# 一鍵全能修補 (同時修補桌布支援與繁體中文化)
+ag-toolkit patch --tw -k
+
+# 單獨安裝繁體中文化
+ag-toolkit locale install --tw -k
+
+# 單獨安裝簡體中文化 (保留英文品牌名)
+ag-toolkit locale install --brand-title english -k
+
+# 開啟 Folder 開發模式 (免打包即時修改)
+ag-toolkit dev-mode on -k
+
+# 關閉 Folder 開發模式並恢復 ASAR
+ag-toolkit dev-mode off -k
+
+# 徹底恢復官方原版 (移除所有補丁與中文化)
+ag-toolkit restore -k
+
+# 終止所有 Antigravity 背景處理程序
+ag-toolkit kill
+
+# 啟動 Antigravity
+ag-toolkit launch
+```
+
+---
+
+## 📂 專案檔案結構 (Project Structure)
+
+```text
+charming-noether/
+├── bin/
+│   ├── ag-toolkit.js            # 主執行程式 (CLI / 互動式選單)
+│   └── ag-themer.js             # 舊版別名向下相容
+├── dicts/                       # 簡體中文分類字典 (common, menu, agents, mcp, settings)
+├── dicts_tw/                    # 繁體中文分類字典 (依台灣軟體工程習慣深度校訂)
+├── localization_engine.js       # 舊版本地化引擎轉接器 (完全向下相容)
+├── 雙擊啟動工具箱.bat            # Windows 啟動互動式選單
+├── 雙擊安裝繁體中文.bat          # Windows 繁體中文一鍵安裝
+├── 双击安装简体中文.bat          # Windows 简体中文一键安装
+├── 雙擊解除安裝還原官方英文.bat   # Windows 一鍵還原原版
+├── src/
+│   ├── index.js                 # 模組統一匯出入口
+│   ├── paths.js                 # 跨平台 (Win/Mac/Linux) 安裝路徑自動偵測
+│   ├── localizationManager.js   # 核心中文化引擎 (字典解析/DOM防護/選單/系統匣/彈窗注入)
+│   ├── patcher.js               # 單次 ASAR 解包/雙重注入/重包引擎
+│   ├── themeManager.js          # 桌布與樣式管理員 (內建 6 款風格/透明度與模糊編譯)
+│   ├── customUiLoader.js        # 注入運行時載入器 (Mica/Acrylic/Iframe穿透/Hot-Reload)
+│   ├── backupManager.js         # ASAR 與 unpacked 完整備份還原
+│   ├── devModeManager.js        # Folder 開發模式管理器
+│   ├── processManager.js        # 跨平台程序生命週期管理
+│   ├── configManager.js         # 設定檔持久化 (~/.gemini/antigravity/custom-ui/config.json)
+│   ├── interactive.js           # 終端互動面板
+│   └── cli.js                   # Commander CLI 指令定義
+├── test/
+│   ├── test_patcher.js          # 樣式修補與冪等性測試
+│   ├── test_themes.js           # 主題預設與設定測試
+│   ├── test_asar_pack.js        # ASAR 打包與 chrome-devtools-mcp 解包邊界測試
+│   ├── test_dev_mode.js         # Folder 開發模式測試
+│   ├── test_loader.js           # 運行時樣式注入與並發重載測試
+│   ├── test_localization.js    # 中文化引擎、1:1字典、DOM防護、全能整合測試
+│   └── test_runner.js           # 自動化測試總執行器
+└── package.json
+```
+
+---
+
+## 🧪 自動化測試 (Automated Testing)
+
+專案包含完整的單元測試與端到端打包邊界測試：
+```bash
+npm test
+```
+**測試項目涵蓋：**
+1. `Patcher Injections & Idempotency`：AST 注入點精確度、冪等性與乾淨還原。
+2. `Custom UI Runtime Loader & Frame Penetration`：Mica/Acrylic 材質選項、WebFrameMain 穿透、並發安全 Hot-Reload。
+3. `Themes, Presets & Config Persistence`：自訂桌布樣式編譯、設定持久化。
+4. `ASAR Pack, Boundary & Unpack Verification`：`app.asar` 提取打包、`chrome-devtools-mcp` 解包依賴保留驗證。
+5. `Folder Dev Mode Lifecycle & Status`：Folder 開發模式建立、免重新打包即時修改、安全退出。
+6. `Chinese Localization & Integrated Capabilities`：繁簡字典 1:1 校驗、Preload 語法無錯驗證、DOM 禁區排除過濾驗證、選單/托盤/載入頁/更新窗修補、桌布與中文化單次打包並存驗證、Antigravity 1.0 舊架構相容測試。
+
+---
+
+## 🤝 致謝 (Credits)
+
+- 核心本地化詞庫與注入原理參考自：[antigravity2-chinese](https://github.com/yanggu0413/antigravity2-chinese) 與 [antigravity2-cn](https://github.com/qqxpee/antigravity2-cn)
+- 感謝 Antigravity 開發者社群的反饋與支持！
