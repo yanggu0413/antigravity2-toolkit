@@ -37,21 +37,13 @@
 
 ### 方法 A：雙擊一鍵腳本 (Windows / macOS / Linux)
 
-在專案目錄中，直接雙擊對應腳本即可：
-- **開啟全功能互動選單**：
-  - Windows: `雙擊啟動工具箱.bat` 或 `双击启动工具箱.bat`
-- **一鍵安裝繁體中文**：
-  - Windows: `雙擊安裝繁體中文.bat`
-  - macOS: `雙擊安裝繁體中文.command`
-  - Linux: `./安裝繁體中文_Linux.sh`
-- **一鍵安裝簡體中文**：
-  - Windows: `双击安装简体中文.bat`
-  - macOS: `双击安装简体中文.command`
-  - Linux: `./安装简体中文_Linux.sh`
-- **一鍵還原官方英文**：
-  - Windows: `雙擊解除安裝還原官方英文.bat`
-  - macOS: `雙擊解除安裝還原官方英文.command`
-  - Linux: `./解除安裝還原官方英文_Linux.sh`
+在專案目錄中：
+- **開啟全功能視覺化互動選單**：
+  - Windows: 根目錄直接雙擊 **`啟動工具箱.bat`**
+- **快捷單項安裝腳本（位於 `scripts/` 目錄）**：
+  - 一鍵安裝繁體中文：Windows 執行 `scripts/install_tw.bat`；macOS/Linux 執行 `./scripts/install_tw.sh`
+  - 一鍵安裝簡體中文：Windows 執行 `scripts/install_cn.bat`；macOS/Linux 執行 `./scripts/install_cn.sh`
+  - 一鍵還原官方英文：Windows 執行 `scripts/restore.bat`；macOS/Linux 執行 `./scripts/restore.sh`
 
 ---
 
@@ -123,39 +115,37 @@ ag-toolkit launch
 ## 📂 專案檔案結構 (Project Structure)
 
 ```text
-charming-noether/
+antigravity2-toolkit/
+├── 啟動工具箱.bat                # Windows 雙擊啟動互動式選單 (UTF-8, 防閃退)
 ├── bin/
-│   ├── ag-toolkit.js            # 主執行程式 (CLI / 互動式選單)
-│   └── ag-themer.js             # 舊版別名向下相容
-├── dicts/                       # 簡體中文分類字典 (common, menu, agents, mcp, settings)
-├── dicts_tw/                    # 繁體中文分類字典 (依台灣軟體工程習慣深度校訂)
-├── localization_engine.js       # 舊版本地化引擎轉接器 (完全向下相容)
-├── 雙擊啟動工具箱.bat            # Windows 啟動互動式選單
-├── 雙擊安裝繁體中文.bat          # Windows 繁體中文一鍵安裝
-├── 双击安装简体中文.bat          # Windows 简体中文一键安装
-├── 雙擊解除安裝還原官方英文.bat   # Windows 一鍵還原原版
-├── src/
-│   ├── index.js                 # 模組統一匯出入口
-│   ├── paths.js                 # 跨平台 (Win/Mac/Linux) 安裝路徑自動偵測
-│   ├── localizationManager.js   # 核心中文化引擎 (字典解析/DOM防護/選單/系統匣/彈窗注入)
-│   ├── patcher.js               # 單次 ASAR 解包/雙重注入/重包引擎
-│   ├── themeManager.js          # 桌布與樣式管理員 (內建 6 款風格/透明度與模糊編譯)
-│   ├── customUiLoader.js        # 注入運行時載入器 (Mica/Acrylic/Iframe穿透/Hot-Reload)
-│   ├── backupManager.js         # ASAR 與 unpacked 完整備份還原
-│   ├── devModeManager.js        # Folder 開發模式管理器
-│   ├── processManager.js        # 跨平台程序生命週期管理
-│   ├── configManager.js         # 設定檔持久化 (~/.gemini/antigravity/custom-ui/config.json)
-│   ├── interactive.js           # 終端互動面板
-│   └── cli.js                   # Commander CLI 指令定義
-├── test/
-│   ├── test_patcher.js          # 樣式修補與冪等性測試
-│   ├── test_themes.js           # 主題預設與設定測試
-│   ├── test_asar_pack.js        # ASAR 打包與 chrome-devtools-mcp 解包邊界測試
-│   ├── test_dev_mode.js         # Folder 開發模式測試
-│   ├── test_loader.js           # 運行時樣式注入與並發重載測試
-│   ├── test_localization.js    # 中文化引擎、1:1字典、DOM防護、全能整合測試
-│   └── test_runner.js           # 自動化測試總執行器
-└── package.json
+│   └── antigravity2-toolkit.js   # 主執行程式 (CLI / 互動式選單 / 向下相容別名)
+├── dicts/                        # 簡體中文分類字典 (common, menu, agents, mcp, settings)
+├── dicts_tw/                     # 繁體中文分類字典 (依台灣軟體工程習慣深度校訂)
+├── scripts/                      # 快捷輔助腳本目錄
+│   ├── install_tw.bat            # Windows 繁體中文一鍵快速安裝
+│   ├── install_cn.bat            # Windows 簡體中文一鍵快速安裝
+│   ├── restore.bat               # Windows 官方原版一鍵快速還原
+│   ├── install_tw.sh             # macOS / Linux 繁體中文一鍵安裝
+│   ├── install_cn.sh             # macOS / Linux 簡體中文一鍵安裝
+│   └── restore.sh                # macOS / Linux 官方原版一鍵還原
+├── src/                          # 核心模組架構
+│   ├── index.js                  # 模組統一匯出入口
+│   ├── paths.js                  # 跨平台 (Win/Mac/Linux) 安裝路徑自動偵測
+│   ├── localizationManager.js    # 核心中文化引擎 (字典解析/DOM防護/選單/系統匣/彈窗注入)
+│   ├── patcher.js                # 單次 ASAR 解包/雙重注入/重包引擎
+│   ├── themeManager.js           # 桌布與樣式管理員 (內建 6 款風格/透明度與模糊編譯)
+│   ├── customUiLoader.js         # 注入運行時載入器 (Mica/Acrylic/Iframe穿透/Hot-Reload)
+│   ├── backupManager.js          # ASAR 與 unpacked 完整備份還原
+│   ├── devModeManager.js         # Folder 開發模式管理器
+│   ├── processManager.js         # 跨平台程序生命週期管理
+│   ├── configManager.js          # 設定檔持久化 (~/.gemini/antigravity/custom-ui/config.json)
+│   ├── interactive.js            # 終端視覺化互動面板
+│   └── cli.js                    # Commander CLI 指令定義
+├── test/                         # 完整單元與整合測試套件 (6/6 通過)
+│   ├── test_runner.js            # 自動化測試總執行器
+│   └── ...                       # 各模組獨立測試
+├── package.json
+└── README.md
 ```
 
 ---
