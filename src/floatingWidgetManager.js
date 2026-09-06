@@ -2,52 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-let paths = null;
-try {
-  paths = require('./paths');
-} catch (_) {
-  try {
-    paths = require(path.join(__dirname, 'paths'));
-  } catch (_) {
-    paths = {
-      getCustomUiDir: () => process.env.ANTIGRAVITY_CUSTOM_UI_DIR || path.join(require('os').homedir(), '.gemini', 'antigravity', 'custom-ui')
-    };
-  }
-}
-
-let configManager = null;
-try {
-  configManager = require('./configManager');
-} catch (_) {
-  try {
-    configManager = require(path.join(__dirname, 'configManager'));
-  } catch (_) {
-    configManager = {
-      getFloatingWidgetConfig: () => {
-        try {
-          const cfgFile = path.join(paths.getCustomUiDir(), 'config.json');
-          if (fs.existsSync(cfgFile)) {
-            const data = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
-            return data.floatingWidget || { enabled: true };
-          }
-        } catch (_) {}
-        return { enabled: true, collapsed: false, alwaysOnTop: true, position: { x: null, y: null } };
-      },
-      updateFloatingWidgetConfig: (updates) => {
-        try {
-          const cfgFile = path.join(paths.getCustomUiDir(), 'config.json');
-          let current = {};
-          if (fs.existsSync(cfgFile)) {
-            current = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
-          }
-          current.floatingWidget = { ...(current.floatingWidget || {}), ...updates };
-          fs.writeFileSync(cfgFile, JSON.stringify(current, null, 2), 'utf8');
-          return current.floatingWidget;
-        } catch (_) {}
-      }
-    };
-  }
-}
+const os = require('os');
 
 /**
  * Antigravity Desktop Floating Widget Manager
@@ -56,6 +11,7 @@ try {
  * displaying real-time agent status, active thinking time, file operations (+add/-del),
  * and interactive Ask Question decision prompts.
  * 
+ * 100% Self-Contained: No reliance on external paths.js or configManager.js inside app.asar.
  * Zero emojis in any UI or notification elements (100% SVG vector icon compliant).
  */
 
@@ -65,6 +21,56 @@ let moveDebounceTimer = null;
 let isCollapsedState = false;
 let electronRef = null;
 let onAnswerCallback = null;
+
+function getCustomUiDir() {
+  if (process.env.ANTIGRAVITY_CUSTOM_UI_DIR) {
+    return path.resolve(process.env.ANTIGRAVITY_CUSTOM_UI_DIR);
+  }
+  return path.join(os.homedir(), '.gemini', 'antigravity', 'custom-ui');
+}
+
+function getConfigFilePath() {
+  return path.join(getCustomUiDir(), 'config.json');
+}
+
+function getFloatingWidgetConfig() {
+  try {
+    const cfgFile = getConfigFilePath();
+    if (fs.existsSync(cfgFile)) {
+      const data = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+      return data.floatingWidget || { enabled: true };
+    }
+  } catch (_) {}
+  return {
+    enabled: true,
+    collapsed: false,
+    alwaysOnTop: true,
+    position: { x: null, y: null },
+  };
+}
+
+function updateFloatingWidgetConfig(updates) {
+  try {
+    const configDir = getCustomUiDir();
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    const cfgFile = getConfigFilePath();
+    let current = {};
+    if (fs.existsSync(cfgFile)) {
+      try {
+        current = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+      } catch (_) {}
+    }
+    current.floatingWidget = {
+      ...(current.floatingWidget || { enabled: true, collapsed: false, alwaysOnTop: true, position: { x: null, y: null } }),
+      ...updates,
+    };
+    fs.writeFileSync(cfgFile, JSON.stringify(current, null, 2), 'utf8');
+    return current.floatingWidget;
+  } catch (_) {}
+  return updates;
+}
 
 function getElectron(injectedElectron = null) {
   if (injectedElectron) return injectedElectron;
@@ -82,11 +88,12 @@ function getElectron(injectedElectron = null) {
  * @returns {string}
  */
 function resolveWidgetHtmlPath() {
+  const customUiDir = getCustomUiDir();
   const candidates = [
     path.join(__dirname, 'widget', 'widget.html'),
     path.join(__dirname, 'widget.html'),
-    path.join(paths.getCustomUiDir(), 'widget', 'widget.html'),
-    path.join(paths.getCustomUiDir(), 'widget.html'),
+    path.join(customUiDir, 'widget', 'widget.html'),
+    path.join(customUiDir, 'widget.html'),
   ];
 
   for (const c of candidates) {
@@ -95,7 +102,6 @@ function resolveWidgetHtmlPath() {
     }
   }
 
-  // Fallback to default packaged widget path
   return path.join(__dirname, 'widget', 'widget.html');
 }
 
@@ -151,7 +157,7 @@ function init(mainWin, options = {}) {
 
   mainWindowRef = mainWin;
 
-  const config = configManager.getFloatingWidgetConfig();
+  const config = getFloatingWidgetConfig();
   if (config.enabled === false && !options.force) {
     return null;
   }
@@ -245,7 +251,7 @@ function init(mainWin, options = {}) {
       if (!widgetWindow || widgetWindow.isDestroyed()) return;
       try {
         const [curX, curY] = widgetWindow.getPosition();
-        configManager.updateFloatingWidgetConfig({
+        updateFloatingWidgetConfig({
           position: { x: curX, y: curY },
         });
       } catch (_) {}
@@ -284,7 +290,7 @@ function setupIpcHandlers(electron) {
         height: targetHeight,
       });
     }
-    configManager.updateFloatingWidgetConfig({ collapsed: isCollapsedState });
+    updateFloatingWidgetConfig({ collapsed: isCollapsedState });
   });
 
   // Close / Hide
@@ -379,14 +385,11 @@ function destroy() {
     widgetWindow.destroy();
   }
   widgetWindow = null;
+  mainWindowRef = null;
 }
 
-function getWindow() {
-  return widgetWindow;
-}
-
-function isCollapsed() {
-  return isCollapsedState;
+function setOnAnswerCallback(cb) {
+  onAnswerCallback = cb;
 }
 
 module.exports = {
@@ -396,12 +399,12 @@ module.exports = {
   hide,
   destroy,
   updateStatus,
-  getWindow,
-  isCollapsed,
   calculateDefaultPosition,
   isPositionOnAnyDisplay,
   resolveWidgetHtmlPath,
-  setOnAnswerCallback: (cb) => {
-    onAnswerCallback = cb;
-  },
+  setOnAnswerCallback,
+  getCustomUiDir,
+  getFloatingWidgetConfig,
+  updateFloatingWidgetConfig,
+  getWindow: () => widgetWindow,
 };

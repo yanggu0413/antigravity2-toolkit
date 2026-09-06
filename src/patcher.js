@@ -199,8 +199,6 @@ function installCustomUiLoader(targetDistDir) {
     'customUiLoader.js',
     'floatingWidgetManager.js',
     'agentStatusObserver.js',
-    'paths.js',
-    'configManager.js',
   ];
   for (const f of filesToCopy) {
     const source = path.join(__dirname, f);
@@ -293,8 +291,6 @@ function unpatchDirectory(unpackedDir, options = {}) {
       path.join(distDir, 'customUiLoader.js'),
       path.join(distDir, 'floatingWidgetManager.js'),
       path.join(distDir, 'agentStatusObserver.js'),
-      path.join(distDir, 'paths.js'),
-      path.join(distDir, 'configManager.js'),
       path.join(distDir, 'widget', 'widget.html'),
     ];
     for (const f of filesToRemove) {
