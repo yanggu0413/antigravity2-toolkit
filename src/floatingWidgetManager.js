@@ -90,10 +90,10 @@ function getElectron(injectedElectron = null) {
 function resolveWidgetHtmlPath() {
   const customUiDir = getCustomUiDir();
   const candidates = [
-    path.join(__dirname, 'widget', 'widget.html'),
-    path.join(__dirname, 'widget.html'),
     path.join(customUiDir, 'widget', 'widget.html'),
     path.join(customUiDir, 'widget.html'),
+    path.join(__dirname, 'widget', 'widget.html'),
+    path.join(__dirname, 'widget.html'),
   ];
 
   for (const c of candidates) {
