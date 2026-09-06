@@ -126,12 +126,16 @@ function patchUtilsJs(content) {
     text = `${LOADER_INJECTION}\n${text}`;
   }
 
-  // 2. Inject agOpts before new electron_1.BrowserWindow
-  const winAnchor = 'const win = new electron_1.BrowserWindow({';
-  if (!text.includes(winAnchor)) {
-    throw new Error('Could not find "const win = new electron_1.BrowserWindow({" in utils.js');
+  // 2. Inject agOpts before new BrowserWindow
+  const winAnchorRegex = /(?:const|let|var)\s+win\s*=\s*new\s+(?:[\w$.]+\.)?BrowserWindow\s*\(\{/;
+  const winMatch = text.match(winAnchorRegex);
+  if (winMatch) {
+    text = text.replace(winMatch[0], `${OPTS_INJECTION}\n    ${winMatch[0]}`);
+  } else if (text.includes('const win = new electron_1.BrowserWindow({')) {
+    text = text.replace('const win = new electron_1.BrowserWindow({', `${OPTS_INJECTION}\n    const win = new electron_1.BrowserWindow({`);
+  } else {
+    throw new Error('Could not find BrowserWindow creation anchor in utils.js');
   }
-  text = text.replace(winAnchor, `${OPTS_INJECTION}\n    ${winAnchor}`);
 
   // 3. Inject winconfig (backgroundColor, titleBarOverlay, backgroundMaterial)
   const targetConfig = `titleBarOverlay: isMacOS()
@@ -145,11 +149,16 @@ function patchUtilsJs(content) {
   if (text.includes(targetConfig)) {
     text = text.replace(targetConfig, WINCONFIG_INJECTION);
   } else {
-    const tolerantRegex = /titleBarOverlay:\s*isMacOS\(\)[\s\S]*?backgroundColor,/m;
+    const tolerantRegex = /titleBarOverlay:\s*(?:\(0,\s*[\w$.]+\.isMacOS\)\(\)|[\w$.]+\.isMacOS\(\)|isMacOS\(\))\s*\?\s*false\s*:\s*\{[\s\S]*?\},?\s*backgroundColor,?[ \t]*/m;
     if (tolerantRegex.test(text)) {
       text = text.replace(tolerantRegex, WINCONFIG_INJECTION);
     } else {
-      throw new Error('Could not find titleBarOverlay/backgroundColor block in utils.js');
+      const broadRegex = /titleBarOverlay:\s*[^?]+\?[^:]+:\s*\{[\s\S]*?\},?\s*backgroundColor,?[ \t]*/m;
+      if (broadRegex.test(text)) {
+        text = text.replace(broadRegex, WINCONFIG_INJECTION);
+      } else {
+        throw new Error('Could not find titleBarOverlay/backgroundColor block in utils.js');
+      }
     }
   }
 
@@ -158,21 +167,28 @@ function patchUtilsJs(content) {
   if (text.includes(devToolsOriginal)) {
     text = text.replace(devToolsOriginal, DEVTOOLS_INJECTION);
   } else {
-    const devToolsRegex = /devTools:\s*!electron_1\.app\.isPackaged,?/;
+    const devToolsRegex = /devTools:\s*!(?:[\w$.]+\.)?(?:app\.)?isPackaged,?[ \t]*/;
     if (devToolsRegex.test(text)) {
       text = text.replace(devToolsRegex, DEVTOOLS_INJECTION);
     }
   }
 
   // 5. Inject attachCustomUi
-  const attachAnchor = '(0, loadingOverlay_1.attachLoadingOverlay)(win, foregroundColor, backgroundColor);';
-  if (text.includes(attachAnchor)) {
-    text = text.replace(attachAnchor, `${attachAnchor}\n${ATTACH_INJECTION}`);
+  const attachRegex = /(?:\(0\s*,\s*[\w$.]+\.attachLoadingOverlay\)|[\w$.]+\.attachLoadingOverlay|attachLoadingOverlay)\s*\([^)]*\);?/;
+  const attachMatch = text.match(attachRegex);
+  if (attachMatch) {
+    text = text.replace(attachMatch[0], `${attachMatch[0]}\n${ATTACH_INJECTION}`);
   } else {
-    const altAnchor = 'void win.loadURL(url);';
-    if (text.includes(altAnchor)) {
-      text = text.replace(altAnchor, `${ATTACH_INJECTION}\n    ${altAnchor}`);
+    const altRegex = /(?:void\s+)?win\.loadURL\s*\([^)]*\);?/;
+    const altMatch = text.match(altRegex);
+    if (altMatch) {
+      text = text.replace(altMatch[0], `${ATTACH_INJECTION}\n    ${altMatch[0]}`);
     }
+  }
+
+  // Ensure attachCustomUi was actually injected (never silently skip!)
+  if (!text.includes('/* === AG-THEMER-ATTACH-START === */')) {
+    throw new Error('Could not find window attachment anchor (attachLoadingOverlay or win.loadURL) in utils.js');
   }
 
   return text;
@@ -188,13 +204,20 @@ function patchKeybindingsJs(content) {
   }
   let text = content;
 
-  const keyAnchor = 'const isCmdOrCtrl = (0, utils_1.isMacOS)() ? input.meta : input.control;';
-  if (!text.includes(keyAnchor)) {
-    throw new Error('Could not find key combination anchor in keybindings.js');
+  const keyRegex = /(?:const|let|var)\s+isCmdOrCtrl\s*=[^;]+input\.meta\s*:\s*input\.control;?/;
+  const match = text.match(keyRegex);
+  if (match) {
+    text = text.replace(match[0], `${match[0]}\n${KEYBINDINGS_INJECTION}`);
+    return text;
   }
 
-  text = text.replace(keyAnchor, `${keyAnchor}\n${KEYBINDINGS_INJECTION}`);
-  return text;
+  const exactAnchor = 'const isCmdOrCtrl = (0, utils_1.isMacOS)() ? input.meta : input.control;';
+  if (text.includes(exactAnchor)) {
+    text = text.replace(exactAnchor, `${exactAnchor}\n${KEYBINDINGS_INJECTION}`);
+    return text;
+  }
+
+  throw new Error('Could not find key combination anchor in keybindings.js');
 }
 
 function installCustomUiLoader(targetDistDir) {
@@ -218,6 +241,10 @@ function installCustomUiLoader(targetDistDir) {
   const sourceWidget = path.join(__dirname, 'widget', 'widget.html');
   if (fs.existsSync(sourceWidget)) {
     fs.copyFileSync(sourceWidget, path.join(widgetDir, 'widget.html'));
+  }
+  const sourcePreload = path.join(__dirname, 'widget', 'widgetPreload.js');
+  if (fs.existsSync(sourcePreload)) {
+    fs.copyFileSync(sourcePreload, path.join(widgetDir, 'widgetPreload.js'));
   }
 }
 
@@ -314,21 +341,47 @@ function unpatchDirectory(unpackedDir, options = {}) {
   return { success: true };
 }
 
+const activeTempDirs = new Set();
+function registerGlobalTempCleanup() {
+  if (global.__ag_temp_cleanup_registered) return;
+  global.__ag_temp_cleanup_registered = true;
+
+  const cleanup = () => {
+    for (const d of activeTempDirs) {
+      try { fs.rmSync(d, { recursive: true, force: true }); } catch (_) {}
+    }
+    if (process.stdout.isTTY) {
+      try { process.stdout.write('\x1B[?25h'); } catch (_) {}
+    }
+  };
+
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(130);
+  });
+  process.on('SIGTERM', () => {
+    cleanup();
+    process.exit(143);
+  });
+  process.on('exit', cleanup);
+}
+registerGlobalTempCleanup();
+
 /**
  * Full ASAR patch pipeline:
- *  1. Process check & optional kill
- *  2. Backup app.asar -> app.asar.bak
- *  3. Extract app.asar to temp directory
- *  4. Patch directory (theming + optional localization)
- *  5. Re-package ASAR with unpack flags
- *  6. Replace app.asar atomically
+ *  1. Process check & optional kill with verification
+ *  2. Backup app.asar -> app.asar.bak (protecting 0-byte files)
+ *  3. Extract app.asar to temp directory and preserve all unpacked dependencies
+ *  4. Patch directory (theming + optional localization + dev mode sync)
+ *  5. Re-package ASAR with comprehensive native unpack flags
+ *  6. Replace app.asar atomically via staged rename and merge unpacked folder
  *  7. Initialize presets & theme.css
  *  8. Re-sign app on macOS if applicable
  */
 async function patchAsar(options = {}) {
   const manualDir = options.manualDir || null;
 
-  // Permission check on Unix
+  // Permission check
   const perm = paths.checkWritePermissions(manualDir);
   if (!perm.writable && perm.needsElevation) {
     throw new Error(perm.hint);
@@ -340,61 +393,126 @@ async function patchAsar(options = {}) {
   // 1. Process check
   if (!options.skipProcessCheck && !process.env.ANTIGRAVITY_TEST_MODE && processManager.isAntigravityRunning()) {
     if (options.kill) {
-      processManager.killProcesses();
+      const killed = processManager.killProcesses();
+      if (!killed && processManager.isAntigravityRunning()) {
+        throw new Error('Failed to terminate all Antigravity processes. Please close them manually.');
+      }
     } else {
       throw new Error('Antigravity is currently running. Close it or specify --kill.');
     }
   }
 
-  // If app.asar does not exist but backup does, restore from backup
-  if (!fs.existsSync(asarPath) && fs.existsSync(backupPath)) {
+  const isCorruptedOrEmpty = (p) => {
+    if (!p || !fs.existsSync(p)) return true;
+    try {
+      const stat = fs.statSync(p);
+      return !stat.isFile() || stat.size === 0;
+    } catch (_) {
+      return true;
+    }
+  };
+
+  // If app.asar does not exist or is 0-byte but backup does, restore from backup
+  if (isCorruptedOrEmpty(asarPath) && !isCorruptedOrEmpty(backupPath)) {
+    console.warn('[ag-toolkit] Target ASAR is missing or 0 bytes. Self-healing from backup...');
     fs.copyFileSync(backupPath, asarPath);
   }
 
-  if (!fs.existsSync(asarPath)) {
-    throw new Error(`Target ASAR not found at: ${asarPath}`);
+  if (!fs.existsSync(asarPath) || fs.statSync(asarPath).size === 0) {
+    throw new Error(`Target ASAR not found or empty at: ${asarPath}`);
   }
 
   // 2. Ensure backup
   backupManager.backupAsar(false, manualDir);
 
+  // Ghost patch check: if Dev Mode is active (resources/app exists), patch it directly too
+  const devAppDir = paths.getDevAppDir(manualDir);
+  let devModePatched = false;
+  if (fs.existsSync(devAppDir)) {
+    patchDirectory(devAppDir, options);
+    devModePatched = true;
+  }
+
   // 3. Extract to temp directory
   const tempDir = path.join(os.tmpdir(), `ag-toolkit-pack-${Date.now()}`);
+  activeTempDirs.add(tempDir);
   fs.mkdirSync(tempDir, { recursive: true });
 
   try {
     asar.extractAll(asarPath, tempDir);
 
-    // Ensure chrome-devtools-mcp is present in tempDir before repacking
+    // CRITICAL: Preserve all official unpacked native binaries
     const unpackedDir = paths.getAsarUnpackedDir(manualDir);
-    const tempMcp = path.join(tempDir, 'node_modules', 'chrome-devtools-mcp');
-    if (!fs.existsSync(tempMcp) && fs.existsSync(unpackedDir)) {
-      const srcMcp = path.join(unpackedDir, 'node_modules', 'chrome-devtools-mcp');
-      if (fs.existsSync(srcMcp)) {
-        fs.cpSync(srcMcp, tempMcp, { recursive: true, force: true });
+    const existingUnpackedRelPaths = [];
+    if (fs.existsSync(unpackedDir)) {
+      try {
+        fs.cpSync(unpackedDir, tempDir, { recursive: true, force: true });
+        const scanDir = (currDir, relBase) => {
+          const items = fs.readdirSync(currDir);
+          for (const item of items) {
+            const fullPath = path.join(currDir, item);
+            const relPath = relBase ? `${relBase}/${item}` : item;
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              if (relPath.startsWith('node_modules/')) {
+                existingUnpackedRelPaths.push(relPath);
+              }
+              scanDir(fullPath, relPath);
+            }
+          }
+        };
+        scanDir(unpackedDir, '');
+      } catch (e) {
+        console.warn('[ag-toolkit] Warning scanning unpacked dependencies:', e.message);
       }
     }
 
     // 4. Patch files inside tempDir
     const patchResult = patchDirectory(tempDir, options);
 
-    // 5. Pack back to temporary asar file
+    // 5. Pack back to temporary asar file with dynamic unpack patterns
+    const unpackPatterns = [
+      '**/*.node',
+      '**/*.dll',
+      '**/*.dylib',
+      '**/*.so',
+      '**/chrome-devtools-mcp/**',
+    ];
+    for (const rel of existingUnpackedRelPaths) {
+      unpackPatterns.push(`**/${rel}/**`);
+    }
+    const unpackPattern = '{' + Array.from(new Set(unpackPatterns)).join(',') + '}';
+
     const tempAsar = path.join(os.tmpdir(), `ag-toolkit-out-${Date.now()}.asar`);
     await asar.createPackageWithOptions(tempDir, tempAsar, {
-      unpack: '**/chrome-devtools-mcp/**',
+      unpack: unpackPattern,
       unpackDir: 'node_modules/chrome-devtools-mcp',
     });
 
-    // 6. Replace target asar
-    fs.copyFileSync(tempAsar, asarPath);
+    // 6. Replace target asar atomically using staged rename
+    const asarDir = path.dirname(asarPath);
+    const stagedAsar = path.join(asarDir, `.app.asar.staged-${Date.now()}`);
+    fs.copyFileSync(tempAsar, stagedAsar);
     try { fs.rmSync(tempAsar, { force: true }); } catch (_) {}
 
-    // Copy .unpacked directory if generated
+    try {
+      fs.renameSync(stagedAsar, asarPath);
+    } catch (renameErr) {
+      try {
+        if (fs.existsSync(asarPath)) fs.unlinkSync(asarPath);
+        fs.renameSync(stagedAsar, asarPath);
+      } catch (_) {
+        fs.copyFileSync(stagedAsar, asarPath);
+        try { fs.unlinkSync(stagedAsar); } catch (_) {}
+      }
+    }
+
+    // Merge .unpacked directory into targetUnpacked (NEVER rmSync targetUnpacked!)
     const tempUnpacked = tempAsar + '.unpacked';
     const targetUnpacked = asarPath + '.unpacked';
     if (fs.existsSync(tempUnpacked)) {
-      if (fs.existsSync(targetUnpacked)) {
-        try { fs.rmSync(targetUnpacked, { recursive: true, force: true }); } catch (_) {}
+      if (!fs.existsSync(targetUnpacked)) {
+        fs.mkdirSync(targetUnpacked, { recursive: true });
       }
       fs.cpSync(tempUnpacked, targetUnpacked, { recursive: true, force: true });
       try { fs.rmSync(tempUnpacked, { recursive: true, force: true }); } catch (_) {}
@@ -432,8 +550,10 @@ async function patchAsar(options = {}) {
       backupPath,
       themePatched: patchResult.themePatched,
       localizationPatched: patchResult.localizationPatched,
+      devModePatched,
     };
   } finally {
+    activeTempDirs.delete(tempDir);
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
     } catch (_) {}

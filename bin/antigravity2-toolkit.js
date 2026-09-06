@@ -6,10 +6,17 @@ const patcher = require('../src/patcher');
 const backupManager = require('../src/backupManager');
 const processManager = require('../src/processManager');
 const paths = require('../src/paths');
+const { relaunchWithSudoIfNeeded } = require('../src/elevationManager');
 const pc = require('picocolors');
 
 async function main() {
   const args = process.argv.slice(2);
+
+  const elevation = relaunchWithSudoIfNeeded(args);
+  if (elevation.relaunched) {
+    process.exitCode = elevation.exitCode;
+    return;
+  }
 
   // If no arguments provided, launch interactive menu directly
   if (args.length === 0) {
@@ -23,6 +30,12 @@ async function main() {
   // e.g., node ag-toolkit.js --huifu
   const knownCommands = ['menu', 'ui', 'interactive', 'set', 'wallpaper', 'clear', 'remove', 'unset', 'status', 'patch', 'locale', 'localize', 'dev-mode', 'restore', 'huifu', 'theme', 'config', 'open', 'launch', 'kill'];
   const firstArg = args[0];
+
+  if (args.includes('--status') && !args.includes('status')) {
+    const sIdx = args.indexOf('--status');
+    args.splice(sIdx, 1, 'status');
+    process.argv = [process.argv[0], process.argv[1], ...args];
+  }
 
   if (firstArg && !firstArg.startsWith('-') && !knownCommands.includes(firstArg)) {
     // Unrecognized command, fall through to CLI parser

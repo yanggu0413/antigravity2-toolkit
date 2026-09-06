@@ -214,9 +214,9 @@ function init(mainWin, options = {}) {
   if (electron.screen) {
     try {
       let matchedDisplay = null;
-      if (mainWindow && typeof mainWindow.getBounds === 'function' && !mainWindow.isDestroyed()) {
+      if (mainWin && typeof mainWin.getBounds === 'function' && (!mainWin.isDestroyed || !mainWin.isDestroyed())) {
         if (typeof electron.screen.getDisplayMatching === 'function') {
-          matchedDisplay = electron.screen.getDisplayMatching(mainWindow.getBounds());
+          matchedDisplay = electron.screen.getDisplayMatching(mainWin.getBounds());
         }
       }
       if (!matchedDisplay && typeof electron.screen.getPrimaryDisplay === 'function') {

@@ -57,6 +57,7 @@ function registerKeybindings(win, actions) {
 `;
     fs.writeFileSync(path.join(mockDist, 'utils.js'), stockUtils, 'utf8');
     fs.writeFileSync(path.join(mockDist, 'keybindings.js'), stockKeybindings, 'utf8');
+    fs.writeFileSync(path.join(mockDist, 'preload.js'), '// mock preload.js\n', 'utf8');
     fs.writeFileSync(path.join(mockMcp, 'chrome-devtools-mcp.js'), '// MCP Server Entry Point', 'utf8');
     fs.writeFileSync(path.join(mockAppDir, 'package.json'), JSON.stringify({ name: 'antigravity-dev-mock', version: '2.12.2' }), 'utf8');
 
@@ -108,19 +109,45 @@ function registerKeybindings(win, actions) {
     assert(readBack.includes(customDevNote), 'Direct modification must be retained without repacking');
     console.log('  ✔ Direct filesystem edits work instantaneously in Folder Mode');
 
-    // 6. Disable Folder Dev Mode
+    // 6. Disable Folder Dev Mode with automatic safety backup
     const disableResult = await devModeManager.disableDevMode();
     assert(disableResult.success, 'disableDevMode should succeed');
     assert(!fs.existsSync(enableResult.folderPath), 'resources/app folder must be removed');
     assert(fs.existsSync(path.join(sandboxResourcesDir, 'app.asar')), 'app.asar must be restored');
     assert(!fs.existsSync(path.join(sandboxResourcesDir, 'app.asar.dev-disabled')), 'app.asar.dev-disabled must not exist');
-    console.log('  ✔ Folder Dev Mode disabled: resources/app removed and app.asar restored');
+
+    // Verify automatic safety backup directory was created
+    const backupDirs = fs.readdirSync(sandboxResourcesDir).filter(f => f.startsWith('app.dev-bak-'));
+    assert(backupDirs.length > 0, 'A safety backup folder app.dev-bak-* must be preserved before folder deletion');
+    console.log('  ✔ Folder Dev Mode disabled: automatic safety backup created and app.asar restored');
 
     // 7. Status check after reverting
     const revertedStatus = devModeManager.getDevModeStatus();
     assert(!revertedStatus.enabled, 'Dev mode should be disabled');
     assert(revertedStatus.isAsarActive, 'app.asar should be active again');
     console.log('  ✔ Status inspection confirms return to ASAR mode');
+
+    // 8. Test Ghost Patch Fix: patchAsar syncing resources/app/ during active Dev Mode
+    await devModeManager.enableDevMode();
+    const patcher = require('../src/patcher');
+    const syncPatchResult = await patcher.patchAsar({
+      localization: { locale: 'zh-TW', brandTitle: 'hidden' }
+    });
+    assert(syncPatchResult.success, 'patchAsar during Dev Mode should succeed');
+    const devPreload = path.join(sandboxResourcesDir, 'app', 'dist', 'preload.js');
+    assert(fs.existsSync(devPreload), 'Dev Mode folder resources/app/dist/preload.js must exist and be synced');
+    const devPreloadContent = fs.readFileSync(devPreload, 'utf8');
+    assert(devPreloadContent.includes('ANTIGRAVITY CHINESE LOCALIZATION') && devPreloadContent.includes('USE_TW = true'), 'Dev Mode folder must receive localization patch without ghost disconnect');
+    console.log('  ✔ Active Dev Mode receives patch sync directly without ghost state disconnect');
+
+    // 9. Test disableDevMode with repack option
+    const devUtilsFile = path.join(sandboxResourcesDir, 'app', 'dist', 'utils.js');
+    fs.appendFileSync(devUtilsFile, '\n// __REPACKED_DEV_MODIFICATIONS__\n', 'utf8');
+    const repackDisableResult = await devModeManager.disableDevMode({ repack: true });
+    assert(repackDisableResult.success, 'disableDevMode with repack option should succeed');
+    const repackedUtils = asar.extractFile(path.join(sandboxResourcesDir, 'app.asar'), 'dist/utils.js').toString('utf8');
+    assert(repackedUtils.includes('__REPACKED_DEV_MODIFICATIONS__'), 'Repacked ASAR must incorporate Dev Mode changes');
+    console.log('  ✔ disableDevMode with repack option preserves and bundles developer modifications');
 
     console.log('Folder Dev Mode Unit Tests PASSED!\n');
   } finally {

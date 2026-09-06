@@ -117,10 +117,10 @@ function parseStepText(rawText) {
   const mCmd = cleaned.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
   if (mCmd) {
     let cmd = mCmd[1].trim();
+    cmd = cmd.replace(/[^\s"'\(\)]*[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/][^\\/]+[\\/]scratch[\\/]/gi, 'scratch/');
     if (cmd.startsWith('node scratch/')) {
       cmd = cmd.replace(/^node scratch\//, '');
     }
-    cmd = cmd.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
     return {
       type: 'cmd',
       text: cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd,
@@ -286,7 +286,7 @@ function getObserverScript() {
           if (!bt || /^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過|關閉|Close|X)$/i.test(bt)) {
             continue;
           }
-          if (/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
+          if (/^(一般|通用|常規|常规|外觀|外观|模型|自訂設定|自定义设置|瀏覽器|浏览器|帳號|账号|賬戶|账户|偏好設定|偏好设置|設定|设置|General|Appearance|Models|Account|Feedback|About)$/i.test(bt)) {
             continue;
           }
           var cleanText = bt.replace(/^\s*\d+[\s\.\:\、\)]*/, '').trim() || bt;
@@ -368,7 +368,7 @@ function getObserverScript() {
                 break;
               }
               var cText = curr.innerText || '';
-              if (cText.indexOf('應用程式設定') !== -1 || (cText.indexOf('外觀') !== -1 && cText.indexOf('模型') !== -1)) {
+              if (cText.indexOf('應用程式設定') !== -1 || cText.indexOf('应用程序设置') !== -1 || ((cText.indexOf('外觀') !== -1 || cText.indexOf('外观') !== -1) && (cText.indexOf('模型') !== -1 || cText.indexOf('通用') !== -1 || cText.indexOf('常规') !== -1))) {
                 break;
               }
               if (cText.indexOf('？') !== -1 || cText.indexOf('?') !== -1 || /Waiting for user input|Asking \d+ question|Recommended|Other/i.test(cText)) {
@@ -448,13 +448,13 @@ function getObserverScript() {
           }
           var dLines = dlgText.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
           var dTitle = dLines[0] || '';
-          if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(dTitle)) {
+          if (/^(設定|Settings|Preferences|设置|偏好設定|偏好设置|意見回饋|意见反馈|Feedback|關於|关于|鍵盤快捷鍵|键盘快捷键|Keyboard Shortcuts|自定义设置|自訂設定)$/i.test(dTitle)) {
             continue;
           }
-          if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
+          if (dlgText.indexOf('應用程式設定') !== -1 || dlgText.indexOf('应用程序设置') !== -1 || ((dlgText.indexOf('外觀') !== -1 || dlgText.indexOf('外观') !== -1) && (dlgText.indexOf('模型') !== -1 || dlgText.indexOf('通用') !== -1 || dlgText.indexOf('常规') !== -1))) {
             continue;
           }
-          if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
+          if (/General|Appearance|Models|Account|通用|常规|外观|模型|账号|账户/i.test(dlgText) && /Settings|Preferences|設定|设置|首选项|偏好設定|偏好设置/i.test(dlgText)) {
             continue;
           }
 
@@ -595,10 +595,10 @@ function getObserverScript() {
         var mCmd = raw.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
         if (mCmd) {
           var cmd = mCmd[1].trim();
+          cmd = cmd.replace(/[^\s"'\(\)]*[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/][^\\/]+[\\/]scratch[\\/]/gi, 'scratch/');
           if (cmd.indexOf('node scratch/') === 0) {
             cmd = cmd.replace(/^node scratch\//, '');
           }
-          cmd = cmd.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
           var cmdKey = 'cmd:' + cmd;
           if (!seenActKeys[cmdKey]) {
             seenActKeys[cmdKey] = true;
@@ -640,7 +640,7 @@ function getObserverScript() {
           var tKey = 'cmd:' + tText;
           if (!seenActKeys[tKey]) {
             seenActKeys[tKey] = true;
-            var cClean = tText.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
+            var cClean = tText.replace(/[^\s"'\(\)]*[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/][^\\/]+[\\/]scratch[\\/]/gi, 'scratch/');
             cmdCount++;
             activities.push({ type: 'cmd', text: cClean.length > 50 ? cClean.slice(0, 47) + '...' : cClean, diff: '' });
           }
@@ -837,12 +837,27 @@ function getObserverScript() {
     });
   }
 
-  // Periodic polling + DOM mutation observer
-  setInterval(scrapeDom, 800);
-  scrapeDom();
+  // Periodic polling + throttled DOM mutation observer (debounced 250ms to prevent layout thrashing)
+  var scrapeTimer = null;
+  function scheduleScrape() {
+    if (scrapeTimer) return;
+    scrapeTimer = setTimeout(function() {
+      scrapeTimer = null;
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(function() {
+          scrapeDom();
+        });
+      } else {
+        scrapeDom();
+      }
+    }, 250);
+  }
+
+  setInterval(scheduleScrape, 2000);
+  scheduleScrape();
 
   var observer = new MutationObserver(function() {
-    scrapeDom();
+    scheduleScrape();
   });
 
   if (document.body) {
@@ -888,7 +903,7 @@ function getScraperExpression() {
           if (!bt || /^(Submit|送出|提交|確認送出|確定|Skip|略過|跳過|關閉|Close|X)$/i.test(bt)) {
             continue;
           }
-          if (/^(一般|外觀|模型|自訂設定|瀏覽器|General|Appearance|Models|Account)$/i.test(bt)) {
+          if (/^(一般|通用|常規|常规|外觀|外观|模型|自訂設定|自定义设置|瀏覽器|浏览器|帳號|账号|賬戶|账户|偏好設定|偏好设置|設定|设置|General|Appearance|Models|Account|Feedback|About)$/i.test(bt)) {
             continue;
           }
           const cleanText = bt.replace(/^\\s*\\d+[\\s\\.\\:\\、\\)]*/, '').trim() || bt;
@@ -964,7 +979,7 @@ function getScraperExpression() {
                 break;
               }
               const cText = curr.innerText || '';
-              if (cText.indexOf('應用程式設定') !== -1 || (cText.indexOf('外觀') !== -1 && cText.indexOf('模型') !== -1)) {
+              if (cText.indexOf('應用程式設定') !== -1 || cText.indexOf('应用程序设置') !== -1 || ((cText.indexOf('外觀') !== -1 || cText.indexOf('外观') !== -1) && (cText.indexOf('模型') !== -1 || cText.indexOf('通用') !== -1 || cText.indexOf('常规') !== -1))) {
                 break;
               }
               if (cText.indexOf('？') !== -1 || cText.indexOf('?') !== -1 || /Waiting for user input|Asking \\d+ question|Recommended|Other/i.test(cText)) {
@@ -1032,13 +1047,13 @@ function getScraperExpression() {
           }
           const lines = dlgText.split('\\n').map(s => s.trim()).filter(Boolean);
           const qTitle = lines[0] || '';
-          if (/^(設定|Settings|Preferences|偏好設定|意見回饋|Feedback|關於|About|鍵盤快捷鍵|Keyboard Shortcuts)$/i.test(qTitle)) {
+          if (/^(設定|Settings|Preferences|设置|偏好設定|偏好设置|意見回饋|意见反馈|Feedback|關於|关于|鍵盤快捷鍵|键盘快捷键|Keyboard Shortcuts|自定义设置|自訂設定)$/i.test(qTitle)) {
             continue;
           }
-          if (dlgText.indexOf('應用程式設定') !== -1 || (dlgText.indexOf('外觀') !== -1 && dlgText.indexOf('模型') !== -1)) {
+          if (dlgText.indexOf('應用程式設定') !== -1 || dlgText.indexOf('应用程序设置') !== -1 || ((dlgText.indexOf('外觀') !== -1 || dlgText.indexOf('外观') !== -1) && (dlgText.indexOf('模型') !== -1 || dlgText.indexOf('通用') !== -1 || dlgText.indexOf('常规') !== -1))) {
             continue;
           }
-          if (/General|Appearance|Models|Account/i.test(dlgText) && /Settings|Preferences/i.test(dlgText)) {
+          if (/General|Appearance|Models|Account|通用|常规|外观|模型|账号|账户/i.test(dlgText) && /Settings|Preferences|設定|设置|首选项|偏好設定|偏好设置/i.test(dlgText)) {
             continue;
           }
 
@@ -1168,10 +1183,10 @@ function getScraperExpression() {
         const mCmd = raw.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
         if (mCmd) {
           let cmd = mCmd[1].trim();
+          cmd = cmd.replace(/[^\s"'\(\)]*[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/][^\\/]+[\\/]scratch[\\/]/gi, 'scratch/');
           if (cmd.indexOf('node scratch/') === 0) {
             cmd = cmd.replace(/^node scratch\//, '');
           }
-          cmd = cmd.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
           const cmdKey = 'cmd:' + cmd;
           if (!seenActKeys[cmdKey]) {
             seenActKeys[cmdKey] = true;
@@ -1213,7 +1228,7 @@ function getScraperExpression() {
           const tKey = 'cmd:' + tText;
           if (!seenActKeys[tKey]) {
             seenActKeys[tKey] = true;
-            const cClean = tText.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
+            const cClean = tText.replace(/[^\s"'\(\)]*[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/][^\\/]+[\\/]scratch[\\/]/gi, 'scratch/');
             cmdCount++;
             activities.push({ type: 'cmd', text: cClean.length > 50 ? cClean.slice(0, 47) + '...' : cClean, diff: '' });
           }

@@ -711,6 +711,19 @@ async function waitForKey() {
 async function startInteractiveMenu() {
   themeManager.initPresets();
 
+  const restoreCursor = () => {
+    if (process.stdout.isTTY) {
+      try { process.stdout.write('\x1B[?25h'); } catch (_) {}
+    }
+  };
+
+  const sigintHandler = () => {
+    restoreCursor();
+    console.log(pc.cyan('\n  感謝使用 Antigravity 全能工具箱，再見！\n'));
+    process.exit(0);
+  };
+  process.once('SIGINT', sigintHandler);
+
   while (true) {
     printBanner();
     printStatusDashboard();
@@ -735,6 +748,7 @@ async function startInteractiveMenu() {
     });
 
     if (!res.action || res.action === 'exit') {
+      restoreCursor();
       console.log(pc.cyan('\n  感謝使用 Antigravity 全能工具箱，再見！\n'));
       break;
     }

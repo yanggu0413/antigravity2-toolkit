@@ -1017,6 +1017,7 @@ module.exports = {
   applyTheme,
   createTheme,
   formatWallpaperUrl,
+  sanitizeCssUrl,
   setWallpaper,
   clearWallpaper,
   getWallpaperConfig,

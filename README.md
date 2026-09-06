@@ -44,7 +44,7 @@
 - **🛠️ Folder 開發模式 (`resources/app/`)**：支援免重新打包直接修改代碼與字典，修改即時生效。
 - **🔄 一鍵無損還原**：自動備份 `app.asar.bak` 與 `app.asar.unpacked.bak`，隨時可完全恢復為官方原廠乾淨狀態。
 - **macOS 自動重簽名與隔離修復**：內建 Ad-hoc 深度重簽名與 Gatekeeper 隔離清理 (`xattr -dr com.apple.quarantine`)，徹底杜絕損壞無法開啟問題。
-- **Linux 權限保護與 Sudo 家目錄防護**：智慧偵測提權需求，並透過 `SUDO_USER` 自動鎖定使用者真實配置目錄。
+- **Linux 權限保護與 Sudo 家目錄防護**：寫入系統安裝目錄時會自動透過 `sudo` 在原終端提示輸入密碼，並以 `SUDO_USER` 鎖定使用者真實配置目錄。
 - **完整向下相容**：同時相容 `ag-themer` 與 `localization_engine.js` 舊版呼叫語法。
 
 ---
@@ -57,7 +57,7 @@
 - **開啟全功能視覺化互動選單**：
   - **Windows**: 根目錄直接雙擊 **`啟動工具箱.bat`**
   - **macOS**: 根目錄直接雙擊 **`啟動工具箱.command`**（或終端執行 `./啟動工具箱.sh`）
-  - **Linux**: 終端執行 **`./啟動工具箱.sh`**（若修改 `/opt` 目錄權限不足可使用 `sudo ./啟動工具箱.sh`）
+  - **Linux**: 終端執行 **`./啟動工具箱.sh`**；若修改 `/opt` 等受保護目錄，工具會自動顯示 `sudo` 密碼提示並提權後繼續。
 - **快捷單項安裝腳本（位於 `scripts/` 目錄）**：
   - 一鍵安裝繁體中文：Windows 執行 `scripts/install_tw.bat`；macOS/Linux 執行 `./scripts/install_tw.sh`
   - 一鍵安裝簡體中文：Windows 執行 `scripts/install_cn.bat`；macOS/Linux 執行 `./scripts/install_cn.sh`

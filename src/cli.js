@@ -23,7 +23,9 @@ function createCli() {
     .option('--huifu', 'Restore official English original version (same as restore)')
     .option('--brand-title <mode>', 'Brand title mode: english, hidden, or translated', 'english')
     .option('--install-dir <path>', 'Custom Antigravity installation path')
-    .option('--no-kill', 'Skip closing running Antigravity processes');
+    .option('--no-kill', 'Skip closing running Antigravity processes')
+    .option('--status', 'Display Antigravity installation, wallpaper, and localization status')
+    .option('--json', 'Output status in JSON format');
 
   // Interactive menu command
   program
@@ -87,12 +89,23 @@ function createCli() {
     .command('status')
     .description('Display Antigravity installation, wallpaper, and localization status')
     .option('--install-dir <path>', 'Custom installation directory')
+    .option('--json', 'Output status in JSON format')
     .action((opts) => {
       const manualDir = opts.installDir || program.opts().installDir;
       const status = backupManager.getPatchStatus(manualDir);
       const wpConfig = themeManager.getWallpaperConfig();
       const locConfig = configManager.getLocalizationConfig();
       const running = processManager.getRunningProcesses();
+
+      if (opts.json || program.opts().json) {
+        console.log(JSON.stringify({
+          status,
+          wallpaper: wpConfig,
+          localization: locConfig,
+          runningProcesses: running.length,
+        }, null, 2));
+        return;
+      }
 
       console.log(pc.bold('\n--- Antigravity Toolkit Status ---'));
       console.log(`Resources Path:     ${status.resourcesDir}`);

@@ -219,9 +219,14 @@ async function runWidgetTests() {
       async loadURL(url) { this.loadedUrl = url; }
     }
 
+    let getDisplayMatchingCalled = false;
     const mockScreen = {
       getPrimaryDisplay: () => ({ workArea: fullHdArea }),
       getAllDisplays: () => [{ workArea: fullHdArea }],
+      getDisplayMatching: (bounds) => {
+        getDisplayMatchingCalled = true;
+        return { workArea: fullHdArea };
+      },
     };
 
     const mockElectron = {
@@ -253,6 +258,14 @@ async function runWidgetTests() {
     assert.strictEqual(win.alwaysOnTop.flag, true);
     assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
+    // Security Verification: Sandbox, contextIsolation, no nodeIntegration, preload script
+    assert.strictEqual(win.options.webPreferences.nodeIntegration, false, 'Security: nodeIntegration must be false');
+    assert.strictEqual(win.options.webPreferences.contextIsolation, true, 'Security: contextIsolation must be true');
+    assert.strictEqual(win.options.webPreferences.sandbox, true, 'Security: sandbox must be true');
+    assert.ok(win.options.webPreferences.preload, 'Security: preload script must be configured');
+    assert.ok(getDisplayMatchingCalled, 'Multi-monitor display matching must be queried for main window placement');
+    console.log('  ✔ Floating widget security architecture (no nodeIntegration, contextIsolation, sandbox) verified');
+
     // Simulate ready-to-show
     win.emit('ready-to-show');
     assert(win.isVisible(), 'Window should become visible on ready-to-show');
@@ -269,6 +282,14 @@ async function runWidgetTests() {
     assert.strictEqual(win.getBounds().height, 480, 'Height must expand to 480px');
     assert.strictEqual(configManager.getFloatingWidgetConfig().collapsed, false);
     assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
+
+    // Test clamped expand at top boundary: expanding near top must clamp to workArea.y
+    win.setBounds({ x: 100, y: 10, width: 420, height: 42 });
+    ipcHandlers['ag-widget-toggle-collapse']({}, false);
+    const expandedBounds = win.getBounds();
+    assert.strictEqual(expandedBounds.height, 480);
+    assert.ok(expandedBounds.y >= fullHdArea.y, `Expanded widget y (${expandedBounds.y}) must clamp to >= ${fullHdArea.y}`);
+    console.log('  ✔ Clamped expand at top boundary prevents negative coordinates');
 
     // Test Focus Main Window IPC
     assert(ipcHandlers['ag-widget-focus-main'], 'Must register ag-widget-focus-main handler');

@@ -21,9 +21,13 @@ async function runAsarPackTests() {
     const mockAppDir = path.join(os.tmpdir(), `ag-mock-app-${Date.now()}`);
     const mockDist = path.join(mockAppDir, 'dist');
     const mockMcp = path.join(mockAppDir, 'node_modules', 'chrome-devtools-mcp', 'build', 'src', 'bin');
+    const mockRipgrep = path.join(mockAppDir, 'node_modules', '@vscode', 'ripgrep', 'bin');
+    const mockNativeNode = path.join(mockAppDir, 'node_modules', 'native-addon', 'build', 'Release');
 
     fs.mkdirSync(mockDist, { recursive: true });
     fs.mkdirSync(mockMcp, { recursive: true });
+    fs.mkdirSync(mockRipgrep, { recursive: true });
+    fs.mkdirSync(mockNativeNode, { recursive: true });
 
     // Copy or write stock files
     const stockUtils = `"use strict";
@@ -71,13 +75,14 @@ function registerKeybindings(win, actions) {
     fs.writeFileSync(path.join(mockDist, 'utils.js'), stockUtils, 'utf8');
     fs.writeFileSync(path.join(mockDist, 'keybindings.js'), stockKeybindings, 'utf8');
     fs.writeFileSync(path.join(mockMcp, 'chrome-devtools-mcp.js'), '// MCP Server Entry Point', 'utf8');
+    fs.writeFileSync(path.join(mockRipgrep, 'rg.exe'), 'MOCK_RIPGREP_BINARY', 'utf8');
+    fs.writeFileSync(path.join(mockNativeNode, 'addon.node'), 'MOCK_NODE_ADDON', 'utf8');
     fs.writeFileSync(path.join(mockAppDir, 'package.json'), JSON.stringify({ name: 'antigravity-mock', version: '2.12.2' }), 'utf8');
 
     // 2. Package into mock app.asar
     const targetAsar = path.join(sandboxResourcesDir, 'app.asar');
     await asar.createPackageWithOptions(mockAppDir, targetAsar, {
-      unpack: '**/chrome-devtools-mcp/**',
-      unpackDir: 'node_modules/chrome-devtools-mcp',
+      unpack: '{**/chrome-devtools-mcp/**,**/@vscode/ripgrep/**,**/*.node}',
     });
     assert(fs.existsSync(targetAsar), 'Mock app.asar should be created');
     console.log('  ✔ Mock app.asar created successfully');
@@ -110,7 +115,7 @@ function registerKeybindings(win, actions) {
     assert(keysContent.includes('AG-THEMER-SHORTCUTS-START'), 'Repacked keybindings must contain shortcuts');
     console.log('  ✔ Repacked ASAR contains all injected hooks and loader');
 
-    // 5. Critical Boundary Check: chrome-devtools-mcp must be unpacked
+    // 5. Critical Boundary Check: Multi-unpacked dependencies must survive
     const unpackedMcp = path.join(
       sandboxResourcesDir,
       'app.asar.unpacked',
@@ -121,8 +126,29 @@ function registerKeybindings(win, actions) {
       'bin',
       'chrome-devtools-mcp.js'
     );
+    const unpackedRg = path.join(
+      sandboxResourcesDir,
+      'app.asar.unpacked',
+      'node_modules',
+      '@vscode',
+      'ripgrep',
+      'bin',
+      'rg.exe'
+    );
+    const unpackedNode = path.join(
+      sandboxResourcesDir,
+      'app.asar.unpacked',
+      'node_modules',
+      'native-addon',
+      'build',
+      'Release',
+      'addon.node'
+    );
+
     assert(fs.existsSync(unpackedMcp), `chrome-devtools-mcp must exist at unpacked path: ${unpackedMcp}`);
-    console.log('  ✔ Packaging boundary verified: chrome-devtools-mcp is unpacked for Language Server');
+    assert(fs.existsSync(unpackedRg), `ripgrep binary must survive at unpacked path: ${unpackedRg}`);
+    assert(fs.existsSync(unpackedNode), `native .node addon must survive at unpacked path: ${unpackedNode}`);
+    console.log('  ✔ Packaging boundary verified: multi-unpacked dependencies (mcp, ripgrep, .node) survived repacking');
 
     // 6. Test restoring from backup
     const restoreResult = backupManager.restoreAsar();
@@ -130,7 +156,17 @@ function registerKeybindings(win, actions) {
     const restoredUtils = asar.extractFile(targetAsar, 'dist/utils.js').toString('utf8');
     assert(!restoredUtils.includes('AG-THEMER'), 'Restored ASAR must be stock and have no AG-THEMER markers');
     assert(fs.existsSync(unpackedMcp), 'Restored unpacked directory must contain chrome-devtools-mcp');
+    assert(fs.existsSync(unpackedRg), 'Restored unpacked directory must contain ripgrep');
+    assert(fs.existsSync(unpackedNode), 'Restored unpacked directory must contain native addon');
     console.log('  ✔ ASAR restore successfully reverts to stock version and preserves unpacked tree');
+
+    // 7. Self-Healing Test: Corrupt ASAR to 0 bytes and verify auto-recovery from .bak
+    fs.writeFileSync(targetAsar, '');
+    assert.strictEqual(fs.statSync(targetAsar).size, 0, 'Target ASAR should be corrupted to 0 bytes');
+    const healResult = await patcher.patchAsar();
+    assert(healResult.success, 'patchAsar should succeed by self-healing from .bak');
+    assert(fs.statSync(targetAsar).size > 1000, 'Patched ASAR must be non-empty and restored');
+    console.log('  ✔ Corrupted 0-byte ASAR self-healing and recovery verified');
 
     console.log('ASAR Pack & Boundary Tests PASSED!\n');
   } finally {

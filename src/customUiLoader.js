@@ -333,7 +333,7 @@ function attachCustomUi(win) {
               }
             }
           } catch (_) {}
-        }, 1000);
+        }, 3000);
       }
     } catch (_) {}
   }

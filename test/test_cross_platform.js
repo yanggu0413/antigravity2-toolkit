@@ -115,6 +115,14 @@ async function runTests() {
     fs.rmSync(mockRestrictedDir, { recursive: true, force: true });
     console.log('  ✔ checkWritePermissions diagnosis & sudo hints verified');
 
+    // Windows elevation check
+    setMockPlatform('win32');
+    const winPermResult = paths.checkWritePermissions('C:\\Windows\\System32\\inaccessible_mock_dir');
+    assert.strictEqual(winPermResult.writable, false);
+    assert.strictEqual(winPermResult.needsElevation, true);
+    assert.ok(winPermResult.hint.includes('系統管理員身分') || winPermResult.hint.includes('Administrator'));
+    console.log('  ✔ Windows Administrator elevation diagnosis and guidance verified');
+
     // ============================================================
     // 4. Test BrowserWindow Options Across Platforms
     // ============================================================
@@ -200,6 +208,36 @@ async function runTests() {
     assert.ok(cmdContent.includes('啟動工具箱.sh'), '啟動工具箱.command must delegate to 啟動工具箱.sh');
 
     console.log('  ✔ Universal launcher scripts (啟動工具箱.sh & .command) verified');
+
+    // ============================================================
+    // 6. Test Wallpaper URL Sanitization & POSIX File Resolution
+    // ============================================================
+    const themeManager = require('../src/themeManager');
+    const maliciousUrl = 'https://example.com/bg.png"); } body { background: red; } /*';
+    const sanitized = themeManager.sanitizeCssUrl(maliciousUrl);
+    assert(!sanitized.includes('"'), 'Sanitized URL must not contain unencoded quotes');
+    assert(!sanitized.includes(')'), 'Sanitized URL must not contain unencoded parens');
+    assert(!sanitized.includes(';'), 'Sanitized URL must not contain unencoded semicolons');
+
+    // POSIX root slash preservation: formatWallpaperUrl on mock Darwin
+    setMockPlatform('darwin');
+    const posixFileUrl = 'file:///opt/antigravity/bg.png';
+    const formatted = themeManager.formatWallpaperUrl(posixFileUrl);
+    assert(formatted.startsWith('url('), 'Must return formatted CSS url');
+    console.log('  ✔ Wallpaper CSS injection sanitization and POSIX URL handling verified');
+
+    // ============================================================
+    // 7. Test Universal Scratch Path Desensitization
+    // ============================================================
+    const agentStatusObserver = require('../src/agentStatusObserver');
+    const winCmdStep = agentStatusObserver.parseStepText('Ran node C:\\Users\\Administrator\\.gemini\\antigravity\\brain\\abc123xyz\\scratch\\test_script.js');
+    assert.strictEqual(winCmdStep.type, 'cmd');
+    assert.strictEqual(winCmdStep.text, 'test_script.js');
+
+    const unixCmdStep = agentStatusObserver.parseStepText('Ran node /home/developer/.gemini/antigravity/brain/fedcba/scratch/helper.js');
+    assert.strictEqual(unixCmdStep.type, 'cmd');
+    assert.strictEqual(unixCmdStep.text, 'helper.js');
+    console.log('  ✔ Universal scratch path desensitization across all platforms and user profiles verified');
 
     console.log('Cross-Platform Compatibility Tests PASSED!');
   } finally {
