@@ -149,19 +149,64 @@ div[class*="group/user-input-step"] div.whitespace-pre-wrap {
   word-break: break-word !important;
 }
 
-/* Step/Tool buttons: compact pill styling with soft, subtle frosted hover */
-button[class*="tabular-nums"][class*="hover:bg-muted"],
+/* Step/Tool buttons: high-contrast frosted pill with clear text contrast in both Light & Dark modes */
+button[class*="tabular-nums"],
 button.group.flex.items-center.tabular-nums {
   width: fit-content !important;
   max-width: 100% !important;
-  transition: background-color 0.15s ease, opacity 0.15s ease !important;
+  background-color: color-mix(in srgb, var(--card, #1e1e24) 82%, transparent) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255, 255, 255, 0.15)) 65%, transparent) !important;
+  border-radius: 6px !important;
+  padding: 2px 8px !important;
+  margin: 1px 0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease !important;
 }
 
-button[class*="tabular-nums"][class*="hover:bg-muted"]:hover,
+button[class*="tabular-nums"]:hover,
 button.group.flex.items-center.tabular-nums:hover {
-  background-color: color-mix(in srgb, var(--muted) 45%, transparent) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
+  background-color: color-mix(in srgb, var(--card, #1e1e24) 95%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary, #38bdf8) 45%, var(--border, rgba(255, 255, 255, 0.2))) !important;
+}
+
+/* Ensure step text, labels, and file names have crisp, high-contrast readability */
+button[class*="tabular-nums"] span,
+button.group.flex.items-center.tabular-nums span {
+  color: var(--foreground, #f3f4f6) !important;
+  opacity: 1 !important;
+}
+
+/* Step file line tags and secondary info (e.g. #L80-160) - ensure crisp contrast */
+button[class*="tabular-nums"] [class*="opacity-"],
+button[class*="tabular-nums"] .text-xs,
+button[class*="tabular-nums"] span:last-child {
+  color: color-mix(in srgb, var(--foreground, #ffffff) 78%, var(--muted-foreground, #a1a1aa)) !important;
+  opacity: 1 !important;
+}
+
+/* High contrast for secondary/muted text across chat & tool execution steps in Dark Mode */
+.text-muted-foreground,
+[class*="text-muted-foreground"],
+[class*="text-zinc-500"],
+[class*="text-gray-400"] {
+  color: color-mix(in srgb, var(--foreground, #ffffff) 82%, var(--muted-foreground, #a1a1aa)) !important;
+}
+
+/* Summary headers & thought toggles ("Exploring X files", "Thought for Xs") */
+button:has(> svg):has([class*="text-muted"]) {
+  background-color: color-mix(in srgb, var(--card, #1e1e24) 75%, transparent) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255, 255, 255, 0.12)) 60%, transparent) !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+}
+
+/* AI Assistant text readability enhancement over wallpaper */
+div.leading-relaxed.select-text {
+  color: var(--foreground, #f3f4f6) !important;
 }
 
 /* Remove bottom fade gradient bar that creates an ugly dark shadow on the wallpaper */
@@ -352,19 +397,64 @@ div[class*="group/user-input-step"] div.whitespace-pre-wrap {
   word-break: break-word !important;
 }
 
-/* Step/Tool buttons: compact pill styling with soft, subtle frosted hover */
-button[class*="tabular-nums"][class*="hover:bg-muted"],
+/* Step/Tool buttons: high-contrast frosted pill with clear text contrast in both Light & Dark modes */
+button[class*="tabular-nums"],
 button.group.flex.items-center.tabular-nums {
   width: fit-content !important;
   max-width: 100% !important;
-  transition: background-color 0.15s ease, opacity 0.15s ease !important;
+  background-color: color-mix(in srgb, var(--card, #1e1e24) 82%, transparent) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255, 255, 255, 0.15)) 65%, transparent) !important;
+  border-radius: 6px !important;
+  padding: 2px 8px !important;
+  margin: 1px 0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease !important;
 }
 
-button[class*="tabular-nums"][class*="hover:bg-muted"]:hover,
+button[class*="tabular-nums"]:hover,
 button.group.flex.items-center.tabular-nums:hover {
-  background-color: color-mix(in srgb, var(--muted) 45%, transparent) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
+  background-color: color-mix(in srgb, var(--card, #1e1e24) 95%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary, #38bdf8) 45%, var(--border, rgba(255, 255, 255, 0.2))) !important;
+}
+
+/* Ensure step text, labels, and file names have crisp, high-contrast readability */
+button[class*="tabular-nums"] span,
+button.group.flex.items-center.tabular-nums span {
+  color: var(--foreground, #f3f4f6) !important;
+  opacity: 1 !important;
+}
+
+/* Step file line tags and secondary info (e.g. #L80-160) - ensure crisp contrast */
+button[class*="tabular-nums"] [class*="opacity-"],
+button[class*="tabular-nums"] .text-xs,
+button[class*="tabular-nums"] span:last-child {
+  color: color-mix(in srgb, var(--foreground, #ffffff) 78%, var(--muted-foreground, #a1a1aa)) !important;
+  opacity: 1 !important;
+}
+
+/* High contrast for secondary/muted text across chat & tool execution steps in Dark Mode */
+.text-muted-foreground,
+[class*="text-muted-foreground"],
+[class*="text-zinc-500"],
+[class*="text-gray-400"] {
+  color: color-mix(in srgb, var(--foreground, #ffffff) 82%, var(--muted-foreground, #a1a1aa)) !important;
+}
+
+/* Summary headers & thought toggles ("Exploring X files", "Thought for Xs") */
+button:has(> svg):has([class*="text-muted"]) {
+  background-color: color-mix(in srgb, var(--card, #1e1e24) 75%, transparent) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255, 255, 255, 0.12)) 60%, transparent) !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+}
+
+/* AI Assistant text readability enhancement over wallpaper */
+div.leading-relaxed.select-text {
+  color: var(--foreground, #f3f4f6) !important;
 }
 
 /* Remove bottom fade gradient bar that creates an ugly dark shadow on the wallpaper */
