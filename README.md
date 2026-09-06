@@ -24,7 +24,22 @@
   - 嚴格跳過對話內文 Markdown 渲染區。
 - **靈活品牌名設定**：可選擇保留原生英文 `Antigravity`、隱藏品牌名或在地化顯示。
 
-### 3. 🛡️ 安全無損與開發者友好
+### 3. 📌 桌面即時狀態懸浮窗 (Desktop Floating Widget)
+- **Windows 11 Fluent Acrylic 亞克力設計**：自適應系統深色/淺色主題，14px 圓角與細緻陰影，完美融合現代作業系統。
+- **100% 向量 SVG 圖示 (Strictly Zero Emoji)**：全面採用高品質向量圖式庫，排版緊湊精緻。
+- **即時雙向狀態監控**：
+  - **狀態呼吸燈**：顯示待命中、思考時間（Thought for Xs）、工具執行中。
+  - **檔案與指令統計**：即時統計探索檔案數、修改檔案數、代碼行數變化（`+X -Y`）與終端指令執行次數。
+  - **動態歷程流**：支援展開查看近 10 項檔案檢視、檔案編輯與執行指令歷程。
+- **互動式 Ask Question / 執行計畫決策**：
+  - 當 Agent 觸發 `ask_question` 或任務計畫等待審批時，浮窗彈出高亮決策卡。
+  - 支援在浮窗內直接點擊選項按鈕即時回應用戶選擇，無需切換 Antigravity 主視窗。
+- **拖曳記憶與微型膠囊**：
+  - 預設停靠於螢幕右下角，支援滑鼠任意拖曳並自動記憶關機座標。
+  - 支援一鍵折疊為迷你膠囊狀態（高僅 38px）。
+  - 內建快捷鍵 `Ctrl+Shift+W` 快速顯示 / 隱藏。
+
+### 4. 🛡️ 安全無損與開發者友好
 - **單次打包雙重注入**：桌布增強與中文化可在單次 ASAR 解包/重包中完成，零多餘解包開銷。
 - **🛠️ Folder 開發模式 (`resources/app/`)**：支援免重新打包直接修改代碼與字典，修改即時生效。
 - **🔄 一鍵無損還原**：自動備份 `app.asar.bak` 與 `app.asar.unpacked.bak`，隨時可完全恢復為官方原廠乾淨狀態。
@@ -135,14 +150,19 @@ antigravity2-toolkit/
 │   ├── patcher.js                # 單次 ASAR 解包/雙重注入/重包引擎
 │   ├── themeManager.js           # 桌布與樣式管理員 (內建 6 款風格/透明度與模糊編譯)
 │   ├── customUiLoader.js         # 注入運行時載入器 (Mica/Acrylic/Iframe穿透/Hot-Reload)
+│   ├── floatingWidgetManager.js  # 桌面懸浮窗 BrowserWindow 生命週期、座標記憶與 IPC 路由管理
+│   ├── agentStatusObserver.js    # Antigravity 主視窗 DOM 狀態、思考時間、Step Accordion 與 Ask 決策提取
+│   ├── widget/
+│   │   └── widget.html           # 向量 SVG 亞克力即時懸浮面板
 │   ├── backupManager.js          # ASAR 與 unpacked 完整備份還原
 │   ├── devModeManager.js         # Folder 開發模式管理器
 │   ├── processManager.js         # 跨平台程序生命週期管理
 │   ├── configManager.js          # 設定檔持久化 (~/.gemini/antigravity/custom-ui/config.json)
 │   ├── interactive.js            # 終端視覺化互動面板
 │   └── cli.js                    # Commander CLI 指令定義
-├── test/                         # 完整單元與整合測試套件 (6/6 通過)
+├── test/                         # 完整單元與整合測試套件 (7/7 通過)
 │   ├── test_runner.js            # 自動化測試總執行器
+│   ├── test_widget.js            # 桌面即時懸浮窗生命週期與 IPC 通訊測試
 │   └── ...                       # 各模組獨立測試
 ├── package.json
 └── README.md
@@ -163,6 +183,7 @@ npm test
 4. `ASAR Pack, Boundary & Unpack Verification`：`app.asar` 提取打包、`chrome-devtools-mcp` 解包依賴保留驗證。
 5. `Folder Dev Mode Lifecycle & Status`：Folder 開發模式建立、免重新打包即時修改、安全退出。
 6. `Chinese Localization & Integrated Capabilities`：繁簡字典 1:1 校驗、Preload 語法無錯驗證、DOM 禁區排除過濾驗證、選單/托盤/載入頁/更新窗修補、桌布與中文化單次打包並存驗證、Antigravity 1.0 舊架構相容測試。
+7. `Desktop Floating Widget & Live IPC`：懸浮窗預設四角邊界幾何座標、微型膠囊折疊狀態、Diff 指令指標正規化、雙向 IPC 決策轉發、全站嚴格零 Emoji 驗證。
 
 ---
 

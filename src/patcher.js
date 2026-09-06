@@ -69,6 +69,17 @@ const KEYBINDINGS_INJECTION = `            /* === AG-THEMER-SHORTCUTS-START === 
                 event.preventDefault();
                 return;
             }
+            // Ctrl+Shift+W: Toggle Desktop Floating Widget
+            if (isCmdOrCtrl && input.shift && input.key.toLowerCase() === 'w') {
+                try {
+                    const agThemerModule = require('./customUiLoader');
+                    if (agThemerModule && typeof agThemerModule.toggleFloatingWidget === 'function') {
+                        agThemerModule.toggleFloatingWidget();
+                        event.preventDefault();
+                        return;
+                    }
+                } catch (_) {}
+            }
             /* === AG-THEMER-SHORTCUTS-END === */`;
 
 function isPatchedUtilsJs(content) {
@@ -184,9 +195,27 @@ function patchKeybindingsJs(content) {
 }
 
 function installCustomUiLoader(targetDistDir) {
-  const sourceLoader = path.join(__dirname, 'customUiLoader.js');
-  const destLoader = path.join(targetDistDir, 'customUiLoader.js');
-  fs.copyFileSync(sourceLoader, destLoader);
+  const filesToCopy = [
+    'customUiLoader.js',
+    'floatingWidgetManager.js',
+    'agentStatusObserver.js',
+  ];
+  for (const f of filesToCopy) {
+    const source = path.join(__dirname, f);
+    const dest = path.join(targetDistDir, f);
+    if (fs.existsSync(source)) {
+      fs.copyFileSync(source, dest);
+    }
+  }
+
+  const widgetDir = path.join(targetDistDir, 'widget');
+  if (!fs.existsSync(widgetDir)) {
+    fs.mkdirSync(widgetDir, { recursive: true });
+  }
+  const sourceWidget = path.join(__dirname, 'widget', 'widget.html');
+  if (fs.existsSync(sourceWidget)) {
+    fs.copyFileSync(sourceWidget, path.join(widgetDir, 'widget.html'));
+  }
 }
 
 /**
@@ -258,8 +287,20 @@ function unpatchDirectory(unpackedDir, options = {}) {
       const keybindings = fs.readFileSync(keybindingsPath, 'utf8');
       fs.writeFileSync(keybindingsPath, unpatchKeybindingsJs(keybindings), 'utf8');
     }
-    if (fs.existsSync(loaderPath)) {
-      try { fs.unlinkSync(loaderPath); } catch (_) {}
+    const filesToRemove = [
+      path.join(distDir, 'customUiLoader.js'),
+      path.join(distDir, 'floatingWidgetManager.js'),
+      path.join(distDir, 'agentStatusObserver.js'),
+      path.join(distDir, 'widget', 'widget.html'),
+    ];
+    for (const f of filesToRemove) {
+      if (fs.existsSync(f)) {
+        try { fs.unlinkSync(f); } catch (_) {}
+      }
+    }
+    const widgetDir = path.join(distDir, 'widget');
+    if (fs.existsSync(widgetDir)) {
+      try { fs.rmdirSync(widgetDir); } catch (_) {}
     }
   }
 

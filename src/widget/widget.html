@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antigravity 桌面即時浮窗</title>
+  <style>
+    :root {
+      --bg: rgba(255, 255, 255, 0.82);
+      --border: rgba(0, 0, 0, 0.08);
+      --text-main: #18181b;
+      --text-muted: #71717a;
+      --card-bg: rgba(0, 0, 0, 0.03);
+      --card-border: rgba(0, 0, 0, 0.05);
+      --hover-bg: rgba(0, 0, 0, 0.06);
+      --accent-blue: #0284c7;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.12), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: rgba(24, 24, 27, 0.85);
+        --border: rgba(255, 255, 255, 0.12);
+        --text-main: #f4f4f5;
+        --text-muted: #a1a1aa;
+        --card-bg: rgba(255, 255, 255, 0.04);
+        --card-border: rgba(255, 255, 255, 0.07);
+        --hover-bg: rgba(255, 255, 255, 0.08);
+        --shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      font-size: 12px;
+      color: var(--text-main);
+      background: transparent;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 4px;
+    }
+
+    .widget-container {
+      flex: 1;
+      background: var(--bg);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Header & Drag Area */
+    .header {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      -webkit-app-region: drag;
+      cursor: grab;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header:active {
+      cursor: grabbing;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 600;
+      font-size: 11.5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 200px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-blue);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .pulse-dot.idle { background-color: var(--text-muted); }
+    .pulse-dot.thinking {
+      background-color: var(--accent-blue);
+      box-shadow: 0 0 8px var(--accent-blue);
+      animation: pulse 1.5s infinite;
+    }
+    .pulse-dot.running {
+      background-color: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 1.2s infinite;
+    }
+    .pulse-dot.ask {
+      background-color: var(--accent-amber);
+      box-shadow: 0 0 10px var(--accent-amber);
+      animation: pulse 0.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      -webkit-app-region: no-drag;
+    }
+
+    .btn-icon {
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-icon:hover {
+      background: var(--hover-bg);
+      color: var(--text-main);
+    }
+
+    .btn-icon svg {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+    }
+
+    /* Content Area */
+    .content {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Summary Metrics Cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .metric-card:hover {
+      background: var(--hover-bg);
+      border-color: var(--border);
+    }
+
+    .metric-header {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-muted);
+      font-size: 10.5px;
+    }
+
+    .metric-header svg {
+      width: 12px;
+      height: 12px;
+      stroke-width: 2;
+    }
+
+    .metric-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .metric-diff {
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 2px;
+    }
+    .diff-add { color: var(--accent-green); }
+    .diff-del { color: var(--accent-red); }
+
+    /* Ask Question Alert Banner */
+    .ask-card {
+      background: color-mix(in srgb, var(--accent-amber) 10%, var(--bg));
+      border: 1px solid var(--accent-amber);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      animation: glow 2s infinite ease-in-out;
+    }
+
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2); }
+      50% { box-shadow: 0 0 10px 2px rgba(245, 158, 11, 0.35); }
+    }
+
+    .ask-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent-amber);
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .ask-header svg {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+    }
+
+    .ask-title {
+      font-size: 11.5px;
+      color: var(--text-main);
+      line-height: 1.4;
+      font-weight: 500;
+    }
+
+    .ask-options {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 2px;
+    }
+
+    .ask-btn {
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 11px;
+      color: var(--text-main);
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ask-btn:hover {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #fff;
+    }
+
+    .ask-btn svg {
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Activity Stream List */
+    .activity-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 110px;
+      overflow-y: auto;
+    }
+
+    .activity-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: var(--card-bg);
+      font-size: 11px;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .activity-item svg {
+      width: 12px;
+      height: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .badge-tag {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 4px;
+      letter-spacing: 0.2px;
+      flex-shrink: 0;
+    }
+
+    .badge-read { background: rgba(2, 132, 199, 0.15); color: var(--accent-blue); }
+    .badge-edit { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); }
+    .badge-cmd { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+
+    .activity-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    /* Collapsed View (Mini Capsule) */
+    .widget-container.collapsed {
+      height: 38px;
+    }
+    .widget-container.collapsed .content {
+      display: none;
+    }
+    .widget-container.collapsed .header {
+      border-bottom: none;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.25); border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="widget-container" id="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="status-badge" id="statusBadge">
+        <span class="pulse-dot idle" id="pulseDot"></span>
+        <span id="statusText">待命中</span>
+      </div>
+      <div class="controls">
+        <button class="btn-icon" id="btnFocus" title="切換至 Antigravity 主視窗">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </button>
+        <button class="btn-icon" id="btnCollapse" title="折疊 / 展開">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" id="collapseIcon">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <button class="btn-icon" id="btnClose" title="隱藏浮窗 (Ctrl+Shift+W 重新呼出)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content" id="contentArea">
+      <!-- Summary Metrics -->
+      <div class="summary-grid">
+        <!-- Read Files -->
+        <div class="metric-card" id="cardRead">
+          <div class="metric-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <span>讀取檔案</span>
+          </div>
+          <div class="metric-value" id="countRead">0 檔</div>
+        </div>
+
+        <!-- Edited Files -->
+        <div class="metric-card" id="cardEdit">
+          <div class="metric-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            <span>修改檔案</span>
+          </div>
+          <div class="metric-value">
+            <span id="countEdit">0 檔</span>
+            <span class="metric-diff" id="diffStats"></span>
+          </div>
+        </div>
+
+        <!-- Commands Run -->
+        <div class="metric-card" id="cardCmd">
+          <div class="metric-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+            <span>執行指令</span>
+          </div>
+          <div class="metric-value" id="countCmd">0 次</div>
+        </div>
+      </div>
+
+      <!-- Ask Question Alert (conditionally visible) -->
+      <div class="ask-card" id="askCard" style="display: none;">
+        <div class="ask-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <span>等待使用者決策 (Ask Question)</span>
+        </div>
+        <div class="ask-title" id="askTitle">正在等待您的回應...</div>
+        <div class="ask-options" id="askOptions"></div>
+      </div>
+
+      <!-- Activity Stream List -->
+      <div class="activity-section">
+        <div class="section-title">
+          <span>近期活動歷程</span>
+          <span id="activityCount" style="font-weight: normal; opacity: 0.7;">0 項</span>
+        </div>
+        <div class="activity-list" id="activityList">
+          <div class="activity-item" style="color: var(--text-muted); font-style: italic;">
+            暫無檔案或指令動作
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let isCollapsed = false;
+    let state = {
+      status: 'idle', // 'idle' | 'thinking' | 'running' | 'ask'
+      statusText: '待命中',
+      readCount: 0,
+      editCount: 0,
+      addLines: 0,
+      delLines: 0,
+      cmdCount: 0,
+      ask: null, // { question: string, options: string[] }
+      activities: [] // { type: 'read'|'edit'|'cmd', text: string, diff?: string }
+    };
+
+    // DOM Elements
+    const container = document.getElementById('container');
+    const pulseDot = document.getElementById('pulseDot');
+    const statusText = document.getElementById('statusText');
+    const countRead = document.getElementById('countRead');
+    const countEdit = document.getElementById('countEdit');
+    const diffStats = document.getElementById('diffStats');
+    const countCmd = document.getElementById('countCmd');
+    const askCard = document.getElementById('askCard');
+    const askTitle = document.getElementById('askTitle');
+    const askOptions = document.getElementById('askOptions');
+    const activityList = document.getElementById('activityList');
+    const activityCount = document.getElementById('activityCount');
+    const btnCollapse = document.getElementById('btnCollapse');
+    const collapseIcon = document.getElementById('collapseIcon');
+    const btnClose = document.getElementById('btnClose');
+    const btnFocus = document.getElementById('btnFocus');
+
+    // IPC Communication with Main Process
+    let ipc = null;
+    try {
+      if (window.require) {
+        const electron = window.require('electron');
+        ipc = electron.ipcRenderer;
+      }
+    } catch (_) {}
+
+    function render() {
+      // 1. Status Indicator
+      pulseDot.className = 'pulse-dot ' + (state.status || 'idle');
+      statusText.innerText = state.statusText || '待命中';
+
+      // 2. Metrics
+      countRead.innerText = `${state.readCount || 0} 檔`;
+      countEdit.innerText = `${state.editCount || 0} 檔`;
+      
+      let diffHtml = '';
+      if (state.addLines > 0) diffHtml += `<span class="diff-add">+${state.addLines}</span> `;
+      if (state.delLines > 0) diffHtml += `<span class="diff-del">-${state.delLines}</span>`;
+      diffStats.innerHTML = diffHtml;
+
+      countCmd.innerText = `${state.cmdCount || 0} 次`;
+
+      // 3. Ask Question
+      if (state.ask && state.ask.question && Array.isArray(state.ask.options) && state.ask.options.length > 0) {
+        askCard.style.display = 'flex';
+        askTitle.innerText = state.ask.question;
+        askOptions.innerHTML = '';
+        state.ask.options.forEach((opt, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'ask-btn';
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span>${escapeHtml(opt)}</span>
+          `;
+          btn.onclick = () => {
+            if (ipc) {
+              ipc.send('ag-widget-answer-question', idx);
+            }
+          };
+          askOptions.appendChild(btn);
+        });
+      } else {
+        askCard.style.display = 'none';
+      }
+
+      // 4. Activities
+      activityCount.innerText = `${state.activities?.length || 0} 項`;
+      if (state.activities && state.activities.length > 0) {
+        activityList.innerHTML = '';
+        state.activities.slice(-10).reverse().forEach(act => {
+          const item = document.createElement('div');
+          item.className = 'activity-item';
+          let badgeClass = 'badge-read';
+          let tagText = 'READ';
+          let iconSvg = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>';
+          if (act.type === 'edit') {
+            badgeClass = 'badge-edit';
+            tagText = 'EDIT';
+            iconSvg = '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>';
+          } else if (act.type === 'cmd') {
+            badgeClass = 'badge-cmd';
+            tagText = 'CMD';
+            iconSvg = '<polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line>';
+          }
+
+          item.innerHTML = `
+            <span class="badge-tag ${badgeClass}">${tagText}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">${iconSvg}</svg>
+            <span class="activity-text" title="${escapeHtml(act.text)}">${escapeHtml(act.text)}</span>
+            ${act.diff ? `<span class="metric-diff diff-add">${escapeHtml(act.diff)}</span>` : ''}
+          `;
+          activityList.appendChild(item);
+        });
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function toggleCollapse(forceVal) {
+      isCollapsed = typeof forceVal === 'boolean' ? forceVal : !isCollapsed;
+      if (isCollapsed) {
+        container.classList.add('collapsed');
+        collapseIcon.setAttribute('points', '18 15 12 9 6 15');
+      } else {
+        container.classList.remove('collapsed');
+        collapseIcon.setAttribute('points', '6 9 12 15 18 9');
+      }
+      if (ipc) {
+        ipc.send('ag-widget-toggle-collapse', isCollapsed);
+      }
+    }
+
+    btnCollapse.onclick = () => toggleCollapse();
+    btnClose.onclick = () => {
+      if (ipc) ipc.send('ag-widget-close');
+    };
+    btnFocus.onclick = () => {
+      if (ipc) ipc.send('ag-widget-focus-main');
+    };
+
+    window.__ag_update_state = (data) => {
+      if (data) {
+        state = { ...state, ...data };
+        if (data.isCollapsed !== undefined && data.isCollapsed !== isCollapsed) {
+          toggleCollapse(data.isCollapsed);
+        }
+        render();
+      }
+    };
+
+    // Listen for state updates from Main Process
+    if (ipc) {
+      ipc.on('ag-widget-update', (event, data) => {
+        window.__ag_update_state(data);
+      });
+    }
+
+    render();
+  </script>
+</body>
+</html>

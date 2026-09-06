@@ -3,17 +3,24 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+let floatingWidgetManager = null;
+let agentStatusObserver = null;
+try {
+  floatingWidgetManager = require('./floatingWidgetManager');
+} catch (_) {
+  try {
+    floatingWidgetManager = require(path.join(__dirname, 'floatingWidgetManager'));
+  } catch (_) {}
+}
 
-/**
- * Antigravity Custom UI Runtime Loader
- * Injected into the Electron main process (dist/customUiLoader.js).
- * Handles:
- *  - Native Windows 11 Mica / Acrylic material configuration
- *  - Transparent titlebar overlay and zero-alpha background color
- *  - Safe CSS insertion & hot-reload with removeInsertedCSS (prevents memory & style leaks)
- *  - plugin:// iframe and sub-frame style penetration via WebFrameMain.executeJavaScript
- *  - Live window backdrop material switching on config change
- */
+try {
+  agentStatusObserver = require('./agentStatusObserver');
+} catch (_) {
+  try {
+    agentStatusObserver = require(path.join(__dirname, 'agentStatusObserver'));
+  } catch (_) {}
+}
+
 
 function getCustomUiDir() {
   if (process.env.ANTIGRAVITY_CUSTOM_UI_DIR) {
@@ -227,13 +234,66 @@ function attachCustomUi(win) {
     applyCssToAllFrames(cssContent);
   }
 
+  let statusPollTimer = null;
+  let lastStatusJson = '';
+
+  function initFloatingWidgetAndObserver() {
+    if (!win || win.isDestroyed()) return;
+    try {
+      const cfg = readConfig();
+      const widgetConfig = cfg.floatingWidget || {};
+      if (widgetConfig.enabled !== false && floatingWidgetManager) {
+        floatingWidgetManager.init(win);
+      }
+    } catch (err) {
+      console.warn('[ag-themer] Failed to init floating widget:', err.message);
+    }
+
+    if (floatingWidgetManager && typeof floatingWidgetManager.setOnAnswerCallback === 'function' && agentStatusObserver) {
+      floatingWidgetManager.setOnAnswerCallback((idx) => {
+        if (win && !win.isDestroyed() && win.webContents && typeof win.webContents.executeJavaScript === 'function') {
+          const clickCode = agentStatusObserver.getOptionClickExpression(idx);
+          win.webContents.executeJavaScript(clickCode).catch(() => {});
+        }
+      });
+    }
+
+    try {
+      if (agentStatusObserver && win.webContents && typeof win.webContents.executeJavaScript === 'function') {
+        const observerCode = agentStatusObserver.getObserverScript();
+        win.webContents.executeJavaScript(observerCode).catch(() => {});
+
+        if (statusPollTimer) clearInterval(statusPollTimer);
+        const scraperCode = agentStatusObserver.getScraperExpression();
+        statusPollTimer = setInterval(async () => {
+          if (!win || win.isDestroyed()) {
+            clearInterval(statusPollTimer);
+            return;
+          }
+          try {
+            const payload = await win.webContents.executeJavaScript(scraperCode);
+            if (payload && floatingWidgetManager) {
+              const json = JSON.stringify(payload);
+              if (json !== lastStatusJson) {
+                lastStatusJson = json;
+                floatingWidgetManager.updateStatus(payload);
+              }
+            }
+          } catch (_) {}
+        }, 1000);
+      }
+    } catch (_) {}
+  }
+
   // Initial injection when DOM is ready or finishes loading
   win.webContents.on('dom-ready', () => {
     reloadTheme();
+    initFloatingWidgetAndObserver();
   });
 
   win.webContents.on('did-finish-load', () => {
     reloadTheme();
+    initFloatingWidgetAndObserver();
   });
 
   win.webContents.on('did-navigate', () => {
@@ -313,7 +373,14 @@ function attachCustomUi(win) {
       pollInterval = null;
     }
     clearTimeout(debounceTimer);
-    currentCssKey = null;
+    if (statusPollTimer) {
+      clearInterval(statusPollTimer);
+      statusPollTimer = null;
+    }
+
+    if (floatingWidgetManager) {
+      try { floatingWidgetManager.destroy(); } catch (_) {}
+    }
   });
 }
 
@@ -323,4 +390,10 @@ module.exports = {
   attachCustomUi,
   readConfig,
   readThemeCss,
+  toggleFloatingWidget: () => {
+    if (floatingWidgetManager) {
+      floatingWidgetManager.toggle();
+    }
+  },
+  getFloatingWidgetManager: () => floatingWidgetManager,
 };

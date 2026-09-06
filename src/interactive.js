@@ -62,12 +62,18 @@ function printStatusDashboard() {
     ? '品牌名在地化'
     : '保留英文 Antigravity';
 
+  const widgetConfig = configManager.getFloatingWidgetConfig();
+  const widgetStatusText = widgetConfig.enabled !== false
+    ? pc.green(pc.bold('[已啟用] (預設螢幕右下角, 快捷鍵 Ctrl+Shift+W)'))
+    : pc.gray('[已停用]');
+
   console.log(pc.bold('  目前系統狀態：'));
   console.log(`    修補模式:    ${modeBadge}`);
   console.log(`    程序狀態:    ${runningText}`);
   console.log(`    原廠備份:    ${backupText}`);
   console.log(`    中文化狀態:  ${locStatusText} [${brandModeText}]`);
   console.log(`    桌布狀態:    ${wpStatusText}`);
+  console.log(`    即時懸浮窗:  ${widgetStatusText}`);
   if (wpConfig.imagePath) {
     console.log(`    圖片路徑:    ${pc.cyan(wpConfig.imagePath)}`);
     console.log(`    透明度:      ${pc.yellow(String(wpConfig.opacity))} (${Math.round(wpConfig.opacity * 100)}%)`);
@@ -492,6 +498,36 @@ async function handleKill() {
   await waitForKey();
 }
 
+async function handleToggleWidget() {
+  const cfg = configManager.getFloatingWidgetConfig();
+  const res = await prompts({
+    type: 'select',
+    name: 'action',
+    message: `桌面即時懸浮窗目前為【${cfg.enabled !== false ? '已啟用' : '已停用'}】，請選擇操作：`,
+    choices: [
+      { title: cfg.enabled !== false ? '停用桌面即時懸浮窗' : '啟用桌面即時懸浮窗', value: 'toggle_enable' },
+      { title: '重設懸浮窗座標至螢幕右下角預設位置', value: 'reset_pos' },
+      { title: '切換啟動型態 (膠囊微型 / 完整儀表板)', value: 'toggle_collapse' },
+      { title: '返回主選單', value: 'back' },
+    ],
+  });
+
+  if (!res.action || res.action === 'back') return;
+
+  if (res.action === 'toggle_enable') {
+    const updated = configManager.updateFloatingWidgetConfig({ enabled: !(cfg.enabled !== false) });
+    console.log(pc.green(`\n✔ 桌面即時懸浮窗已設定為：${updated.enabled ? '啟用' : '停用'}`));
+  } else if (res.action === 'reset_pos') {
+    configManager.updateFloatingWidgetConfig({ position: { x: null, y: null } });
+    console.log(pc.green('\n✔ 已重設懸浮窗座標至螢幕右下角預設位置！'));
+  } else if (res.action === 'toggle_collapse') {
+    const updated = configManager.updateFloatingWidgetConfig({ collapsed: !cfg.collapsed });
+    console.log(pc.green(`\n✔ 懸浮窗預設型態已設定為：${updated.collapsed ? '微型膠囊' : '完整儀表板'}`));
+  }
+
+  await waitForKey();
+}
+
 async function waitForKey() {
   await prompts({
     type: 'invisible',
@@ -518,6 +554,7 @@ async function startInteractiveMenu() {
         { title: '🇹🇼   安裝繁體中文在地化 (Install Traditional Chinese)', value: 'install_tw' },
         { title: '⚡   一鍵完整修補 (桌布增強 + 中文化) (Full Unified Patch)', value: 'full_patch' },
         { title: '🛠️   切換 Folder 開發模式 (Toggle Dev Mode: Instant Edit)', value: 'dev_mode' },
+        { title: '[浮窗] 設定 / 開關桌面即時懸浮窗 (Floating Widget Settings)', value: 'toggle_widget' },
         { title: '🔄   還原官方原廠備份 (Restore Official Backup)', value: 'restore' },
         { title: '🚀   啟動 / 重啟 Antigravity (Launch / Restart)', value: 'launch' },
         { title: '🛑   關閉 Antigravity 處理程序 (Kill Processes)', value: 'kill' },
@@ -550,6 +587,9 @@ async function startInteractiveMenu() {
       case 'dev_mode':
         await handleDevMode();
         break;
+      case 'toggle_widget':
+        await handleToggleWidget();
+        break;
       case 'restore':
         await handleRestore();
         break;
@@ -576,4 +616,5 @@ module.exports = {
   handleInstallChinese,
   handleFullPatch,
   handleRestore,
+  handleToggleWidget,
 };

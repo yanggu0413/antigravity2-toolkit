@@ -20,6 +20,12 @@ const DEFAULT_CONFIG = {
     locale: 'zh-CN', // 'zh-CN' | 'zh-TW'
     brandTitle: 'english', // 'english' | 'hidden' | 'translated'
   },
+  floatingWidget: {
+    enabled: true,
+    collapsed: false,
+    alwaysOnTop: true,
+    position: { x: null, y: null },
+  },
 };
 
 function ensureCustomUiDirs() {
@@ -35,6 +41,17 @@ function ensureCustomUiDirs() {
   }
   if (!fs.existsSync(assetsDir)) {
     fs.mkdirSync(assetsDir, { recursive: true });
+  }
+  const widgetDir = path.join(customUiDir, 'widget');
+  if (!fs.existsSync(widgetDir)) {
+    fs.mkdirSync(widgetDir, { recursive: true });
+  }
+  const destWidgetHtml = path.join(widgetDir, 'widget.html');
+  const srcWidgetHtml = path.join(__dirname, 'widget', 'widget.html');
+  if (!fs.existsSync(destWidgetHtml) && fs.existsSync(srcWidgetHtml)) {
+    try {
+      fs.copyFileSync(srcWidgetHtml, destWidgetHtml);
+    } catch (_) {}
   }
 }
 
@@ -55,6 +72,14 @@ function getConfig() {
         localization: {
           ...DEFAULT_CONFIG.localization,
           ...(parsed.localization || {}),
+        },
+        floatingWidget: {
+          ...DEFAULT_CONFIG.floatingWidget,
+          ...(parsed.floatingWidget || {}),
+          position: {
+            ...DEFAULT_CONFIG.floatingWidget.position,
+            ...((parsed.floatingWidget && parsed.floatingWidget.position) || {}),
+          },
         },
       };
     } catch (e) {
@@ -83,6 +108,14 @@ function updateConfig(partial) {
       ...current.localization,
       ...(partial.localization || {}),
     },
+    floatingWidget: {
+      ...current.floatingWidget,
+      ...(partial.floatingWidget || {}),
+      position: {
+        ...(current.floatingWidget?.position || {}),
+        ...((partial.floatingWidget && partial.floatingWidget.position) || {}),
+      },
+    },
   };
   saveConfig(merged);
   return merged;
@@ -100,6 +133,25 @@ function updateLocalizationConfig(partial) {
   return updated;
 }
 
+function getFloatingWidgetConfig() {
+  const cfg = getConfig();
+  return cfg.floatingWidget || DEFAULT_CONFIG.floatingWidget;
+}
+
+function updateFloatingWidgetConfig(partial) {
+  const current = getFloatingWidgetConfig();
+  const updated = {
+    ...current,
+    ...partial,
+    position: {
+      ...(current.position || {}),
+      ...((partial && partial.position) || {}),
+    },
+  };
+  updateConfig({ floatingWidget: updated });
+  return updated;
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   ensureCustomUiDirs,
@@ -108,4 +160,6 @@ module.exports = {
   updateConfig,
   getLocalizationConfig,
   updateLocalizationConfig,
+  getFloatingWidgetConfig,
+  updateFloatingWidgetConfig,
 };

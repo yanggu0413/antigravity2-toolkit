@@ -4,6 +4,7 @@ const { runAsarPackTests } = require('./test_asar_pack');
 const { runDevModeTests } = require('./test_dev_mode');
 const { runLoaderTests } = require('./test_loader');
 const { runLocalizationTests } = require('./test_localization');
+const { runWidgetTests } = require('./test_widget');
 
 async function main() {
   console.log('====================================================');
@@ -21,6 +22,7 @@ async function main() {
     { name: 'ASAR Pack, Boundary & Unpack Verification', fn: async () => runAsarPackTests() },
     { name: 'Folder Dev Mode Lifecycle & Status', fn: async () => runDevModeTests() },
     { name: 'Chinese Localization & Integrated Capabilities', fn: async () => runLocalizationTests() },
+    { name: 'Desktop Floating Widget & Live IPC', fn: async () => runWidgetTests() },
   ];
 
   for (const suite of suites) {
