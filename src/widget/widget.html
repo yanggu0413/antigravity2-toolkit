@@ -205,10 +205,10 @@
 
     /* Content Area */
     .content {
-      padding: 8px 10px 10px;
+      padding: 10px 12px 12px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       flex: 1;
       overflow: hidden;
     }
@@ -217,25 +217,26 @@
     .stats-ribbon {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 10px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
-      justify-content: space-around;
-      padding: 6px 4px;
+      justify-content: space-between;
+      padding: 7px 14px;
+      gap: 6px;
     }
 
     .stat-pill {
-      flex: 1;
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 5px;
-      font-size: 11px;
+      gap: 6px;
+      font-size: 11.5px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .stat-pill svg {
-      width: 13px;
-      height: 13px;
+      width: 14px;
+      height: 14px;
       stroke-width: 2;
       color: var(--text-muted);
       flex-shrink: 0;
@@ -243,28 +244,51 @@
 
     .stat-label {
       color: var(--text-muted);
-      font-size: 11px;
+      font-size: 11.5px;
+      white-space: nowrap;
     }
 
     .stat-val {
       font-weight: 700;
-      font-size: 12px;
+      font-size: 12.5px;
       color: var(--text-main);
+      white-space: nowrap;
     }
 
     .stat-badge {
-      font-size: 10px;
-      font-weight: 600;
-      padding: 1px 4px;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1.5px 5px;
       border-radius: 4px;
-      background: rgba(16, 185, 129, 0.12);
-      color: var(--accent-green);
+      background: rgba(0, 0, 0, 0.04);
+      border: 1px solid var(--border-subtle);
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .stat-badge {
+        background: rgba(255, 255, 255, 0.06);
+      }
+    }
+
+    .diff-add {
+      color: #10b981;
+      font-weight: 700;
+    }
+
+    .diff-del {
+      color: #ef4444;
+      font-weight: 700;
     }
 
     .stat-divider {
       width: 1px;
-      height: 16px;
+      height: 18px;
       background: var(--border-subtle);
+      flex-shrink: 0;
     }
 
     /* Ask Question Alert Banner */
@@ -332,44 +356,47 @@
     .activity-section {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
       flex: 1;
       min-height: 0;
     }
 
     .section-title {
-      font-size: 10.5px;
+      font-size: 11px;
       color: var(--text-muted);
       font-weight: 600;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 2px;
+      padding: 0 4px;
     }
 
     .activity-list {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 6px;
       overflow-y: auto;
       flex: 1;
-      padding-right: 2px;
+      padding-right: 4px;
+      scroll-behavior: smooth;
     }
 
     .activity-item {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 6px;
-      border-radius: 6px;
+      gap: 8px;
+      padding: 6px 10px;
+      min-height: 28px;
+      border-radius: 8px;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      font-size: 11px;
+      font-size: 11.5px;
       color: var(--text-main);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      transition: background 0.12s ease;
+      transition: background 0.15s ease;
+      flex-shrink: 0;
     }
 
     .activity-item:hover {
@@ -377,11 +404,11 @@
     }
 
     .badge-tag {
-      font-size: 9px;
+      font-size: 9.5px;
       font-weight: 700;
-      padding: 1px 5px;
+      padding: 2px 6px;
       border-radius: 4px;
-      letter-spacing: 0.2px;
+      letter-spacing: 0.3px;
       flex-shrink: 0;
     }
 
@@ -395,14 +422,19 @@
       white-space: nowrap;
       flex: 1;
       font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
-      font-size: 10.5px;
+      font-size: 11px;
+      line-height: 1.35;
     }
 
     .metric-diff {
-      font-size: 10px;
-      font-weight: 600;
-      margin-left: 2px;
-      color: var(--accent-green);
+      font-size: 10.5px;
+      font-weight: 700;
+      margin-left: 4px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
     }
 
     /* Collapsed View (Mini Capsule) */
@@ -579,8 +611,15 @@
 
       // Diff Badge
       if (state.addLines > 0 || state.delLines > 0) {
-        diffBadge.style.display = 'inline-block';
-        diffBadge.innerText = `+${state.addLines || 0} -${state.delLines || 0}`;
+        diffBadge.style.display = 'inline-flex';
+        let badgeParts = [];
+        if (state.addLines > 0) {
+          badgeParts.push(`<span class="diff-add">+${state.addLines}</span>`);
+        }
+        if (state.delLines > 0) {
+          badgeParts.push(`<span class="diff-del">-${state.delLines}</span>`);
+        }
+        diffBadge.innerHTML = badgeParts.join(' ');
       } else {
         diffBadge.style.display = 'none';
       }
@@ -618,7 +657,7 @@
       activityCount.innerText = `${acts.length} 項`;
       if (acts.length > 0) {
         activityList.innerHTML = '';
-        acts.slice(0, 10).forEach(act => {
+        acts.forEach(act => {
           const item = document.createElement('div');
           item.className = 'activity-item';
           let badgeClass = 'badge-read';
@@ -634,9 +673,14 @@
           item.innerHTML = `
             <span class="badge-tag ${badgeClass}">${tagText}</span>
             <span class="activity-text" title="${escapeHtml(act.text)}">${escapeHtml(act.text)}</span>
-            ${act.diff ? `<span class="metric-diff">${escapeHtml(act.diff)}</span>` : ''}
+            ${act.diff ? `<span class="metric-diff">${formatDiffHtml(act.diff)}</span>` : ''}
           `;
           activityList.appendChild(item);
+        });
+
+        // Auto-scroll to the newest action at the bottom
+        requestAnimationFrame(() => {
+          activityList.scrollTop = activityList.scrollHeight;
         });
       } else {
         activityList.innerHTML = `
@@ -654,6 +698,20 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function formatDiffHtml(diffStr) {
+      if (!diffStr) return '';
+      const mAdd = diffStr.match(/\+(\d+)/);
+      const mDel = diffStr.match(/-(\d+)/);
+      let parts = [];
+      if (mAdd && parseInt(mAdd[1], 10) > 0) {
+        parts.push(`<span class="diff-add">+${mAdd[1]}</span>`);
+      }
+      if (mDel && parseInt(mDel[1], 10) > 0) {
+        parts.push(`<span class="diff-del">-${mDel[1]}</span>`);
+      }
+      return parts.join(' ') || escapeHtml(diffStr);
     }
 
     function toggleCollapse(forceVal) {
