@@ -95,18 +95,33 @@ function parseStepText(rawText) {
     };
   }
 
+  const mCmdGroup = cleaned.match(/^(?:Ran|Run|Executed|執行中?)\s+(\d+)\s+commands?$/i) || cleaned.match(/^(\d+)\s+commands?$/i);
+  if (mCmdGroup) {
+    const count = parseInt(mCmdGroup[1], 10);
+    return {
+      type: 'cmd',
+      text: `${count} 個終端指令`,
+      diff: '',
+      addLines: 0,
+      delLines: 0,
+      count,
+    };
+  }
+
   const mCmd = cleaned.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
   if (mCmd) {
     let cmd = mCmd[1].trim();
     if (cmd.startsWith('node scratch/')) {
       cmd = cmd.replace(/^node scratch\//, '');
     }
+    cmd = cmd.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
     return {
       type: 'cmd',
       text: cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd,
       diff: '',
       addLines: 0,
       delLines: 0,
+      count: 1,
     };
   }
 
@@ -161,7 +176,7 @@ function extractMetrics(stepTexts) {
     } else if (parsed.type === 'read') {
       seenReads.add(parsed.text);
     } else if (parsed.type === 'cmd') {
-      result.cmdCount++;
+      result.cmdCount += (parsed.count || 1);
     }
   }
 
@@ -315,6 +330,19 @@ function getObserverScript() {
           continue;
         }
 
+        // Pattern: Ran <N> commands or <N> commands
+        var mCmdGroup = raw.match(/^(?:Ran|Run|Executed|執行中?)\s+(\d+)\s+commands?$/i);
+        if (!mCmdGroup) {
+          mCmdGroup = raw.match(/^(\d+)\s+commands?$/i);
+        }
+        if (mCmdGroup) {
+          seenRaw[raw] = true;
+          var nCmds = parseInt(mCmdGroup[1], 10);
+          cmdCount += nCmds;
+          activities.push({ type: 'cmd', text: nCmds + ' 個終端指令', diff: '' });
+          continue;
+        }
+
         // Pattern: Ran <cmd>
         var mCmd = raw.match(/^(?:Ran|Run|Executed|執行)\s+(.+)$/i);
         if (mCmd) {
@@ -323,6 +351,7 @@ function getObserverScript() {
           if (cmd.indexOf('node scratch/') === 0) {
             cmd = cmd.replace(/^node scratch\//, '');
           }
+          cmd = cmd.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
           cmdCount++;
           activities.push({ type: 'cmd', text: cmd.length > 50 ? cmd.slice(0, 47) + '...' : cmd, diff: '' });
           continue;
@@ -339,40 +368,92 @@ function getObserverScript() {
         }
       }
 
+      // Check terminal font-mono command headers to never miss commands
+      var termSpans = document.querySelectorAll('span.font-mono, div.font-mono');
+      for (var ts = 0; ts < termSpans.length; ts++) {
+        var tText = (termSpans[ts].innerText || '').trim();
+        if (tText.indexOf('node ') === 0 || tText.indexOf('npm ') === 0 || tText.indexOf('git ') === 0) {
+          if (!seenRaw[tText] && !seenRaw['Ran ' + tText] && !seenRaw['Run ' + tText]) {
+            seenRaw[tText] = true;
+            var cClean = tText.replace(/C:\\Users\\Yanggu\\\.gemini\\antigravity\\brain\\[^\\]+\\scratch\\/g, 'scratch/');
+            cmdCount++;
+            activities.push({ type: 'cmd', text: cClean.length > 50 ? cClean.slice(0, 47) + '...' : cClean, diff: '' });
+          }
+        }
+      }
+
       var readCount = Math.max(Object.keys(seenReads).length, activities.filter(function(a) { return a.type === 'read'; }).length);
       var editCount = Math.max(filesChangedCount, Object.keys(seenEdits).length);
 
-      // 4. Detect thinking / working state
+      // 4. Detect thinking / working state with live second timer
       var isWorking = false;
-      var thinkingText = '';
-      var stopButtons = document.querySelectorAll('button[aria-label*="Cancel"], button[aria-label*="取消"], button[aria-label*="Stop"], button[aria-label*="停止"]');
+      var stopButtons = document.querySelectorAll('button[aria-label*="Cancel"], button[aria-label*="取消"], button[aria-label*="Stop"], button[aria-label*="停止"], button[aria-label*="Stop execution"]');
       if (stopButtons.length > 0) {
         isWorking = true;
       }
 
-      var allButtons = Array.from(document.querySelectorAll('button[class*="tabular-nums"]'));
-      var workingBtn = allButtons.length > 0 ? allButtons[allButtons.length - 1] : null;
-      if (workingBtn) {
-        var wText = (workingBtn.innerText || '').trim();
-        if (wText.includes('Thought') || wText.includes('Worked')) {
-          thinkingText = wText;
-          isWorking = true;
+      var workingTextNode = false;
+      var allNodes = document.querySelectorAll('*');
+      for (var an = 0; an < allNodes.length; an++) {
+        if ((allNodes[an].innerText || '').trim() === 'Working.') {
+          workingTextNode = true;
+          break;
+        }
+      }
+      var isSpinnerActive = document.querySelectorAll('svg[class*="animate"], [class*="spinner"]').length > 0;
+
+      if (isWorking) {
+        if (!window.__ag_work_start_time) {
+          window.__ag_work_start_time = Date.now();
+        }
+      } else {
+        window.__ag_work_start_time = null;
+      }
+
+      var elapsedSec = window.__ag_work_start_time ? Math.max(1, Math.floor((Date.now() - window.__ag_work_start_time) / 1000)) : 0;
+
+      // 5. Scrape latest AI Agent response text
+      var responseInfo = null;
+      var aiResponseEls = document.querySelectorAll('div.leading-relaxed.select-text');
+      if (aiResponseEls.length > 0) {
+        var lastAiEl = aiResponseEls[aiResponseEls.length - 1];
+        var rawAiText = (lastAiEl.innerText || '').trim();
+        if (rawAiText) {
+          var lines = rawAiText.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+          var snippet = '';
+          for (var li = 0; li < lines.length; li++) {
+            if (lines[li].indexOf('#') !== 0 && lines[li].indexOf('---') !== 0) {
+              snippet = lines[li];
+              break;
+            }
+          }
+          if (!snippet && lines.length > 0) snippet = lines[0];
+          if (snippet.length > 150) snippet = snippet.slice(0, 147) + '...';
+
+          responseInfo = {
+            snippet: snippet,
+            full: rawAiText.slice(0, 1200)
+          };
         }
       }
 
-      // Compute status
+      // Compute status with live real-time ticking
       var status = 'idle';
       var statusText = '待命中';
       if (askFound) {
         status = 'ask';
         statusText = '等待使用者決策';
       } else if (isWorking) {
-        if (thinkingText && thinkingText.includes('Thought')) {
-          status = 'thinking';
-        } else {
+        if (workingTextNode || isSpinnerActive) {
           status = 'running';
+          statusText = '執行中 (' + elapsedSec + 's)...';
+        } else {
+          status = 'thinking';
+          statusText = '思考中 (' + elapsedSec + 's)...';
         }
-        statusText = thinkingText || 'Agent 運作中...';
+      } else if (responseInfo) {
+        status = 'completed';
+        statusText = '任務已完成';
       }
 
       var payload = {
@@ -384,7 +465,8 @@ function getObserverScript() {
         delLines: totalDel,
         cmdCount: cmdCount,
         ask: askInfo,
-        activities: activities.slice(0, 15)
+        activities: activities.slice(-100),
+        response: responseInfo
       };
 
       var payloadJson = JSON.stringify(payload);
@@ -584,7 +666,7 @@ function getScraperExpression() {
         delLines,
         cmdCount,
         ask: askInfo,
-        activities: activities.slice(-10)
+        activities: activities.slice(-100)
       };
     })()
   `;
