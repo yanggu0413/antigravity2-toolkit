@@ -229,9 +229,50 @@ div:has(> .flex-grow.overflow-hidden) > div,
 div.shrink-0.flex.items-center[class*="border-b"],
 div[class*="group/file-row"],
 [class*="monaco-editor"],
-[class*="diffEditor"],
 div.flex.flex-col.gap-4.h-full.w-full.bg-background {
   background-color: var(--vscode-editor-background, var(--background)) !important;
+}
+
+/* Diff editor highlights: preserve and protect native green (added) and red (removed) backgrounds */
+.bg-diffEditor-insertedLineBackground,
+[class*="diffEditor-insertedLineBackground"],
+div[class*="insertedLineBackground"] {
+  background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(46, 160, 67, 0.15)) !important;
+}
+
+.bg-diffEditor-removedLineBackground,
+[class*="diffEditor-removedLineBackground"],
+div[class*="removedLineBackground"] {
+  background-color: var(--vscode-diffEditor-removedLineBackground, rgba(248, 81, 73, 0.15)) !important;
+}
+
+.bg-diffEditor-insertedTextBackground,
+[class*="diffEditor-insertedTextBackground"] {
+  background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(46, 160, 67, 0.3)) !important;
+}
+
+.bg-diffEditor-removedTextBackground,
+[class*="diffEditor-removedTextBackground"] {
+  background-color: var(--vscode-diffEditor-removedTextBackground, rgba(248, 81, 73, 0.3)) !important;
+}
+
+/* Diff count badges (+X, -Y) in review header, sidebar, and chat steps */
+.text-green-500,
+[class*="text-green-500"],
+span[class*="text-green"] {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #22c55e) !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.text-red-500,
+[class*="text-red-500"],
+span[class*="text-red"] {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #ef4444) !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 `,
   },
@@ -391,9 +432,50 @@ div:has(> .flex-grow.overflow-hidden) > div,
 div.shrink-0.flex.items-center[class*="border-b"],
 div[class*="group/file-row"],
 [class*="monaco-editor"],
-[class*="diffEditor"],
 div.flex.flex-col.gap-4.h-full.w-full.bg-background {
   background-color: var(--vscode-editor-background, var(--background)) !important;
+}
+
+/* Diff editor highlights: preserve and protect native green (added) and red (removed) backgrounds */
+.bg-diffEditor-insertedLineBackground,
+[class*="diffEditor-insertedLineBackground"],
+div[class*="insertedLineBackground"] {
+  background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(46, 160, 67, 0.15)) !important;
+}
+
+.bg-diffEditor-removedLineBackground,
+[class*="diffEditor-removedLineBackground"],
+div[class*="removedLineBackground"] {
+  background-color: var(--vscode-diffEditor-removedLineBackground, rgba(248, 81, 73, 0.15)) !important;
+}
+
+.bg-diffEditor-insertedTextBackground,
+[class*="diffEditor-insertedTextBackground"] {
+  background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(46, 160, 67, 0.3)) !important;
+}
+
+.bg-diffEditor-removedTextBackground,
+[class*="diffEditor-removedTextBackground"] {
+  background-color: var(--vscode-diffEditor-removedTextBackground, rgba(248, 81, 73, 0.3)) !important;
+}
+
+/* Diff count badges (+X, -Y) in review header, sidebar, and chat steps */
+.text-green-500,
+[class*="text-green-500"],
+span[class*="text-green"] {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #22c55e) !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.text-red-500,
+[class*="text-red-500"],
+span[class*="text-red"] {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #ef4444) !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 `,
   },
