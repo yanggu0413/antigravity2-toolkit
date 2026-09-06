@@ -176,12 +176,50 @@ div.h-full.w-full.flex.flex-col.pb-2.bg-sidebar {
   -webkit-backdrop-filter: blur(16px) !important;
 }
 
-/* Prevent nested sidebar buttons and wrapper divs from stacking dark boxes */
-.bg-sidebar button,
-.bg-sidebar div.bg-sidebar,
+/* Prevent nested sidebar items from stacking dark boxes (strictly exclude floating menus/popovers!) */
+.bg-sidebar div.bg-sidebar:not(.border-menu-border):not([class*="z-"]):not([class*="absolute"]):not([class*="fixed"]),
 button[class*="group/headerbtn"],
 div[class*="group/section-header"] {
   background-color: transparent !important;
+}
+
+/* Floating menus, dropdowns, context menus, popovers, and dialogs:
+   MUST have 100% solid official background so underlying text/wallpaper never bleeds through */
+.bg-sidebar div.border-menu-border,
+div.bg-sidebar.border-menu-border,
+div.border-menu-border,
+div[class*="border-menu-border"],
+div[class*="z-[8000]"],
+div[class*="z-[9999]"],
+div[class*="z-50"].bg-sidebar,
+div[class*="z-50"].bg-popover,
+[role="menu"],
+[role="dialog"],
+[role="listbox"]:not(:empty),
+.bg-popover,
+[data-radix-popper-content-wrapper] > div,
+[data-radix-menu-content] {
+  background-color: var(--vscode-dropdown-background, var(--sidebar, #ffffff)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--border-menu-border, var(--border, rgba(128, 128, 128, 0.2))) !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -4px rgba(0, 0, 0, 0.1) !important;
+  opacity: 1 !important;
+}
+
+/* Ensure buttons inside menus have natural foreground and hover background */
+div.border-menu-border button,
+div[class*="z-[8000]"] button,
+[role="menu"] button,
+[data-radix-menu-content] button {
+  color: var(--foreground) !important;
+}
+
+div.border-menu-border button:hover,
+div[class*="z-[8000]"] button:hover,
+[role="menu"] button:hover,
+[data-radix-menu-content] button:hover {
+  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12)) !important;
 }
 
 /* Ensure the right editor pane retains its native 100% solid background (never transparent!) */
@@ -300,12 +338,50 @@ div.h-full.w-full.flex.flex-col.pb-2.bg-sidebar {
   -webkit-backdrop-filter: blur(16px) !important;
 }
 
-/* Prevent nested sidebar buttons and wrapper divs from stacking dark boxes */
-.bg-sidebar button,
-.bg-sidebar div.bg-sidebar,
+/* Prevent nested sidebar items from stacking dark boxes (strictly exclude floating menus/popovers!) */
+.bg-sidebar div.bg-sidebar:not(.border-menu-border):not([class*="z-"]):not([class*="absolute"]):not([class*="fixed"]),
 button[class*="group/headerbtn"],
 div[class*="group/section-header"] {
   background-color: transparent !important;
+}
+
+/* Floating menus, dropdowns, context menus, popovers, and dialogs:
+   MUST have 100% solid official background so underlying text/wallpaper never bleeds through */
+.bg-sidebar div.border-menu-border,
+div.bg-sidebar.border-menu-border,
+div.border-menu-border,
+div[class*="border-menu-border"],
+div[class*="z-[8000]"],
+div[class*="z-[9999]"],
+div[class*="z-50"].bg-sidebar,
+div[class*="z-50"].bg-popover,
+[role="menu"],
+[role="dialog"],
+[role="listbox"]:not(:empty),
+.bg-popover,
+[data-radix-popper-content-wrapper] > div,
+[data-radix-menu-content] {
+  background-color: var(--vscode-dropdown-background, var(--sidebar, #ffffff)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--border-menu-border, var(--border, rgba(128, 128, 128, 0.2))) !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -4px rgba(0, 0, 0, 0.1) !important;
+  opacity: 1 !important;
+}
+
+/* Ensure buttons inside menus have natural foreground and hover background */
+div.border-menu-border button,
+div[class*="z-[8000]"] button,
+[role="menu"] button,
+[data-radix-menu-content] button {
+  color: var(--foreground) !important;
+}
+
+div.border-menu-border button:hover,
+div[class*="z-[8000]"] button:hover,
+[role="menu"] button:hover,
+[data-radix-menu-content] button:hover {
+  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12)) !important;
 }
 
 /* Ensure the right editor pane retains its native 100% solid background (never transparent!) */
