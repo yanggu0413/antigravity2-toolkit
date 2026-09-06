@@ -286,6 +286,11 @@ function attachCustomUi(win) {
   }
 
   // Initial injection when DOM is ready or finishes loading
+  if (typeof win.webContents.isLoading === 'function' && !win.webContents.isLoading()) {
+    reloadTheme();
+    initFloatingWidgetAndObserver();
+  }
+
   win.webContents.on('dom-ready', () => {
     reloadTheme();
     initFloatingWidgetAndObserver();

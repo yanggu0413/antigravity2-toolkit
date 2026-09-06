@@ -99,6 +99,10 @@ function registerKeybindings(win, actions) {
     // 4. Verify contents inside repacked ASAR
     const list = asar.listPackage(targetAsar);
     assert(list.some((f) => f.includes('customUiLoader.js')), 'customUiLoader.js must be present in ASAR');
+    assert(list.some((f) => f.includes('floatingWidgetManager.js')), 'floatingWidgetManager.js must be present in ASAR');
+    assert(list.some((f) => f.includes('agentStatusObserver.js')), 'agentStatusObserver.js must be present in ASAR');
+    assert(list.some((f) => f.includes('paths.js')), 'paths.js must be present in ASAR');
+    assert(list.some((f) => f.includes('configManager.js')), 'configManager.js must be present in ASAR');
 
     const utilsContent = asar.extractFile(targetAsar, 'dist/utils.js').toString('utf8');
     assert(utilsContent.includes('AG-THEMER-LOADER-START'), 'Repacked utils.js must contain loader hook');

@@ -2,8 +2,52 @@
 
 const fs = require('fs');
 const path = require('path');
-const paths = require('./paths');
-const configManager = require('./configManager');
+let paths = null;
+try {
+  paths = require('./paths');
+} catch (_) {
+  try {
+    paths = require(path.join(__dirname, 'paths'));
+  } catch (_) {
+    paths = {
+      getCustomUiDir: () => process.env.ANTIGRAVITY_CUSTOM_UI_DIR || path.join(require('os').homedir(), '.gemini', 'antigravity', 'custom-ui')
+    };
+  }
+}
+
+let configManager = null;
+try {
+  configManager = require('./configManager');
+} catch (_) {
+  try {
+    configManager = require(path.join(__dirname, 'configManager'));
+  } catch (_) {
+    configManager = {
+      getFloatingWidgetConfig: () => {
+        try {
+          const cfgFile = path.join(paths.getCustomUiDir(), 'config.json');
+          if (fs.existsSync(cfgFile)) {
+            const data = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+            return data.floatingWidget || { enabled: true };
+          }
+        } catch (_) {}
+        return { enabled: true, collapsed: false, alwaysOnTop: true, position: { x: null, y: null } };
+      },
+      updateFloatingWidgetConfig: (updates) => {
+        try {
+          const cfgFile = path.join(paths.getCustomUiDir(), 'config.json');
+          let current = {};
+          if (fs.existsSync(cfgFile)) {
+            current = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+          }
+          current.floatingWidget = { ...(current.floatingWidget || {}), ...updates };
+          fs.writeFileSync(cfgFile, JSON.stringify(current, null, 2), 'utf8');
+          return current.floatingWidget;
+        } catch (_) {}
+      }
+    };
+  }
+}
 
 /**
  * Antigravity Desktop Floating Widget Manager
@@ -160,6 +204,7 @@ function init(mainWin, options = {}) {
     y,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     alwaysOnTop: config.alwaysOnTop !== false,
     skipTaskbar: true,
     resizable: false,
@@ -179,16 +224,18 @@ function init(mainWin, options = {}) {
     widgetWindow.loadURL(`file://${htmlPath.replace(/\\/g, '/')}`);
   }
 
-  widgetWindow.once('ready-to-show', () => {
+  const showWidget = () => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     if (typeof widgetWindow.showInactive === 'function') {
       widgetWindow.showInactive();
     } else {
       widgetWindow.show();
     }
-    // Synchronize initial collapse state
     updateStatus({ isCollapsed: isCollapsedState });
-  });
+  };
+
+  widgetWindow.once('ready-to-show', showWidget);
+  setTimeout(showWidget, 800);
 
   // Track dragging / movement to remember coordinates
   widgetWindow.on('move', () => {

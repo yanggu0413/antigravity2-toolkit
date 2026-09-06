@@ -1,6 +1,7 @@
 const prompts = require('prompts');
 const pc = require('picocolors');
 const fs = require('fs');
+const path = require('path');
 const paths = require('./paths');
 const backupManager = require('./backupManager');
 const processManager = require('./processManager');
@@ -279,74 +280,156 @@ async function handleManageLocale() {
   }
 }
 
-async function handleFullPatchTw() {
-  const running = processManager.isAntigravityRunning();
-  let kill = false;
+/**
+ * All-in-one Setup Wizard:
+ * Prompts user clearly for Language (Traditional/Simplified), Brand Mode,
+ * Custom Wallpaper (path, opacity, blur), and Floating Widget toggle,
+ * then executes the unified patch and launches the app.
+ */
+async function handleFullSetupWizard() {
+  console.log(pc.cyan('\n  ┌─────────────────────────────────────────────────────────────┐'));
+  console.log(pc.cyan('  │') + pc.bold(pc.white('           全能增強引導安裝精靈 (Full Setup Wizard)          ')) + pc.cyan('│'));
+  console.log(pc.cyan('  │') + pc.gray('   一步到位完成：語言在地化 ‧ 自訂背景桌布 ‧ 即時桌面懸浮窗  ') + pc.cyan('│'));
+  console.log(pc.cyan('  └─────────────────────────────────────────────────────────────┘\n'));
 
-  if (running) {
-    const res = await prompts({
-      type: 'confirm',
-      name: 'kill',
-      message: 'Antigravity 正在運行中。是否自動關閉軟體進行一鍵全能修補？',
-      initial: true,
-    });
-    if (!res.kill) return;
-    kill = true;
-  }
-
-  console.log(pc.cyan('\n  正在執行一鍵全能修補 (繁體中文 + 桌布增強 + 懸浮監控窗)...'));
-  try {
-    const result = await patcher.patchAsar({
-      kill,
-      theme: true,
-      localization: {
-        locale: 'zh-TW',
-        brandTitle: 'english',
-      },
-    });
-
-    console.log(pc.green(`\n  [成功] 一鍵全能修補完成！`));
-    console.log(pc.gray(`  已啟用繁體中文在地化 (保持英文品牌名稱)`));
-    console.log(pc.gray(`  已注入背景桌布與透明度支援`));
-    console.log(pc.gray(`  已啟用桌面即時懸浮窗 (快捷鍵 Ctrl+Shift+W)`));
-    console.log(pc.gray(`  ASAR 檔案: ${result.asarPath}`));
-    console.log(pc.gray(`  原廠備份: ${result.backupPath}`));
-
-    if (running) {
-      const launchPrompt = await prompts({
-        type: 'confirm',
-        name: 'launch',
-        message: '是否立即啟動 Antigravity 檢驗效果？',
-        initial: true,
-      });
-      if (launchPrompt.launch) {
-        processManager.launchApp();
-        console.log(pc.green('  [成功] Antigravity 已成功啟動！'));
-      }
-    }
-  } catch (err) {
-    console.log(pc.red(`\n  [失敗] 修補失敗: ${err.message}`));
-  }
-  await waitForKey();
-}
-
-async function handleFullPatch() {
-  const currentLoc = configManager.getLocalizationConfig();
-
-  const choices = [
-    { title: '繁體中文 (zh-TW) + 自訂背景/原生透明度修補 [推薦]', value: 'zh-TW' },
-    { title: '簡體中文 (zh-CN) + 自訂背景/原生透明度修補', value: 'zh-CN' },
-  ];
-
-  const selectPrompt = await prompts({
+  // Step 1: Language
+  const langPrompt = await prompts({
     type: 'select',
     name: 'locale',
-    message: '請選擇要一同注入的中文化語言：',
-    choices,
-    initial: currentLoc.locale === 'zh-TW' ? 0 : 1,
+    message: '【步驟 1/4】請選擇介面語言在地化版本：',
+    choices: [
+      { title: '[1] 繁體中文在地化 (zh-TW) [推薦]', value: 'zh-TW' },
+      { title: '[2] 簡體中文本地化 (zh-CN)', value: 'zh-CN' },
+      { title: '[0] 取消並返回主選單', value: 'cancel' },
+    ],
+    initial: 0,
   });
 
-  if (!selectPrompt.locale) return;
+  if (!langPrompt.locale || langPrompt.locale === 'cancel') return;
+  const targetLocale = langPrompt.locale;
+  const langName = targetLocale === 'zh-TW' ? '繁體中文' : '簡體中文';
+
+  // Step 2: Brand Title Style
+  const brandPrompt = await prompts({
+    type: 'select',
+    name: 'brandTitle',
+    message: `【步驟 2/4】左上角品牌名稱顯示風格：`,
+    choices: [
+      { title: '保持英文 Antigravity（預設推薦，保持原生美觀）', value: 'english' },
+      { title: '隱藏品牌名稱', value: 'hidden' },
+      { title: '啟用在地化名稱 (反重力)', value: 'translated' },
+    ],
+    initial: 0,
+  });
+
+  if (!brandPrompt.brandTitle) return;
+
+  // Step 3: Wallpaper Setup
+  const currentWp = themeManager.getWallpaperConfig();
+  const wpChoicePrompt = await prompts({
+    type: 'select',
+    name: 'wpOption',
+    message: '【步驟 3/4】是否設定自訂背景桌布？',
+    choices: [
+      { title: currentWp.enabled && currentWp.imagePath
+          ? `保留目前背景圖片 (${path.basename(currentWp.imagePath)})`
+          : '設定自訂背景圖片（輸入檔案路徑，支援透明度與模糊度調節）[推薦]', value: 'custom' },
+      { title: '暫不設定桌布（保持官方原生純色外觀，隨時可於主選單設定）', value: 'none' },
+    ],
+    initial: 0,
+  });
+
+  if (!wpChoicePrompt.wpOption) return;
+
+  let wallpaperData = null;
+  if (wpChoicePrompt.wpOption === 'custom') {
+    const wpQuestions = [
+      {
+        type: 'text',
+        name: 'imagePath',
+        message: '請輸入背景圖片完整路徑 (或圖片網址)：',
+        initial: currentWp.imagePath || '',
+        validate: (val) => {
+          const clean = (val || '').replace(/^["']+|["']+$/g, '').trim();
+          if (!clean) return '圖片路徑不能為空！';
+          return true;
+        },
+      },
+      {
+        type: 'number',
+        name: 'opacity',
+        message: '請設定背景透明度 (0.0 ~ 1.0，建議 0.35)：',
+        initial: currentWp.opacity !== undefined ? currentWp.opacity : 0.35,
+        float: true,
+        min: 0,
+        max: 1,
+        increment: 0.05,
+      },
+      {
+        type: 'number',
+        name: 'blur',
+        message: '請設定背景模糊度 (0 ~ 50 px，0 為清晰高清)：',
+        initial: currentWp.blur !== undefined ? currentWp.blur : 0,
+        min: 0,
+        max: 50,
+        increment: 1,
+      },
+    ];
+
+    const wpRes = await prompts(wpQuestions);
+    if (!wpRes.imagePath) return;
+    const cleanPath = wpRes.imagePath.replace(/^["']+|["']+$/g, '').trim();
+    if (!/^https?:\/\//i.test(cleanPath) && !fs.existsSync(cleanPath)) {
+      console.log(pc.yellow(`\n  [注意] 找不到本機檔案「${cleanPath}」，但仍會儲存設定並嘗試套用。`));
+    }
+    wallpaperData = {
+      imagePath: cleanPath,
+      opacity: wpRes.opacity,
+      blur: wpRes.blur,
+    };
+  }
+
+  // Step 4: Floating Widget Toggle
+  const currentWidget = configManager.getFloatingWidgetConfig();
+  const widgetPrompt = await prompts({
+    type: 'select',
+    name: 'enableWidget',
+    message: '【步驟 4/4】是否啟用桌面即時懸浮窗？',
+    choices: [
+      { title: '啟用桌面即時懸浮窗 [推薦] (螢幕右下角，即時監控 Agent 進度/檔案/指令，按 Ctrl+Shift+W 開關)', value: true },
+      { title: '暫不啟用懸浮窗', value: false },
+    ],
+    initial: currentWidget.enabled !== false ? 0 : 1,
+  });
+
+  if (widgetPrompt.enableWidget === undefined) return;
+  const enableFloatingWidget = widgetPrompt.enableWidget;
+
+  // Summary Box
+  console.log(pc.bold('\n  ┌────────────────────────────────────────────────────────────┐'));
+  console.log(pc.bold('  │ 即將套用的全能安裝設定：                                   │'));
+  console.log(`  │  - 介面語言:    ${langName} (${targetLocale}) [${brandPrompt.brandTitle === 'hidden' ? '隱藏品牌名' : brandPrompt.brandTitle === 'translated' ? '在地化品牌名' : '保留英文'}]`);
+  if (wallpaperData) {
+    const baseWp = path.basename(wallpaperData.imagePath);
+    console.log(`  │  - 背景桌布:    已啟用 (${baseWp}) [透明度 ${Math.round(wallpaperData.opacity * 100)}% | 模糊度 ${wallpaperData.blur}px]`);
+  } else {
+    console.log(`  │  - 背景桌布:    官方原生純色外觀`);
+  }
+  console.log(`  │  - 桌面懸浮窗:  ${enableFloatingWidget ? '啟用 (螢幕右下角, 快捷鍵 Ctrl+Shift+W)' : '停用'}`);
+  console.log(pc.bold('  └────────────────────────────────────────────────────────────┘\n'));
+
+  const confirmPrompt = await prompts({
+    type: 'confirm',
+    name: 'proceed',
+    message: '確定立即執行修補並套用所有設定嗎？',
+    initial: true,
+  });
+
+  if (!confirmPrompt.proceed) {
+    console.log(pc.yellow('\n  [提示] 已取消安裝。'));
+    await waitForKey();
+    return;
+  }
 
   const running = processManager.isAntigravityRunning();
   let kill = false;
@@ -355,42 +438,60 @@ async function handleFullPatch() {
     const res = await prompts({
       type: 'confirm',
       name: 'kill',
-      message: 'Antigravity 正在運行中。是否自動關閉程序以進行修補？',
+      message: 'Antigravity 正在運行中。是否自動關閉軟體以進行修補與安裝？',
       initial: true,
     });
     if (!res.kill) return;
     kill = true;
   }
 
-  console.log(pc.cyan('\n  正在執行全能修補 (桌布增強 + 中文化)...'));
+  console.log(pc.cyan('\n  正在執行全能一鍵安裝與修補...'));
   try {
+    // 1. Save wallpaper
+    if (wallpaperData) {
+      themeManager.setWallpaper(wallpaperData.imagePath, {
+        opacity: wallpaperData.opacity,
+        blur: wallpaperData.blur,
+      });
+    } else if (wpChoicePrompt.wpOption === 'none') {
+      themeManager.clearWallpaper();
+    }
+
+    // 2. Save widget config
+    configManager.updateFloatingWidgetConfig({ enabled: enableFloatingWidget });
+
+    // 3. Patch ASAR
     const result = await patcher.patchAsar({
       kill,
       theme: true,
       localization: {
-        locale: selectPrompt.locale,
-        brandTitle: currentLoc.brandTitle || 'english',
+        locale: targetLocale,
+        brandTitle: brandPrompt.brandTitle,
       },
     });
 
-    console.log(pc.green(`\n  [成功] 全能修補成功！`));
+    console.log(pc.green(`\n  [成功] 全能安裝修補部署完成！`));
+    console.log(pc.gray(`  已注入 ${langName} 語言套件`));
+    console.log(pc.gray(`  已配置桌布與透明度樣式`));
+    console.log(pc.gray(`  已配置桌面即時懸浮窗模組`));
     console.log(pc.gray(`  ASAR 檔案: ${result.asarPath}`));
-    console.log(pc.gray(`  原廠備份: ${result.backupPath}`));
 
-    if (running) {
-      const launchPrompt = await prompts({
-        type: 'confirm',
-        name: 'launch',
-        message: '是否立即啟動 Antigravity 檢驗效果？',
-        initial: true,
-      });
-      if (launchPrompt.launch) {
-        processManager.launchApp();
-        console.log(pc.green('  [成功] Antigravity 已成功啟動！'));
+    // 4. Offer launch
+    const launchPrompt = await prompts({
+      type: 'confirm',
+      name: 'launch',
+      message: '是否立即啟動 Antigravity 檢驗效果？',
+      initial: true,
+    });
+    if (launchPrompt.launch) {
+      const pid = processManager.launchApp();
+      console.log(pc.green(`\n  [成功] Antigravity 已成功啟動！(PID: ${pid})`));
+      if (enableFloatingWidget) {
+        console.log(pc.cyan('  [提示] 桌面即時懸浮窗已在螢幕右下角啟動 (快捷鍵 Ctrl+Shift+W)。'));
       }
     }
   } catch (err) {
-    console.log(pc.red(`\n  [失敗] 修補失敗: ${err.message}`));
+    console.log(pc.red(`\n  [失敗] 安裝修補失敗: ${err.message}`));
   }
   await waitForKey();
 }
@@ -613,7 +714,7 @@ async function startInteractiveMenu() {
       name: 'action',
       message: '請使用上下鍵選擇操作項目，按 Enter 確定：',
       choices: [
-        { title: '[01] 一鍵全能安裝 (繁體中文在地化 + 自訂背景增強 + 桌面懸浮窗) [推薦]', value: 'full_patch_tw' },
+        { title: '[01] 一鍵全能安裝引導 (繁簡中文化 + 自訂背景桌布 + 桌面懸浮窗) [推薦]', value: 'full_wizard' },
         { title: '[02] 中文化語言管理 (安裝 / 切換 繁體中文 或 簡體中文)', value: 'manage_locale' },
         { title: '[03] 自訂背景桌布 (設定圖片路徑、透明度、模糊度)', value: 'set_wallpaper' },
         { title: '[04] 清除自訂背景 (恢復官方原生純色外觀)', value: 'clear_wallpaper' },
@@ -633,8 +734,8 @@ async function startInteractiveMenu() {
     }
 
     switch (res.action) {
-      case 'full_patch_tw':
-        await handleFullPatchTw();
+      case 'full_wizard':
+        await handleFullSetupWizard();
         break;
       case 'manage_locale':
         await handleManageLocale();
@@ -664,9 +765,6 @@ async function startInteractiveMenu() {
       case 'dev_mode':
         await handleDevMode();
         break;
-      case 'full_patch':
-        await handleFullPatch();
-        break;
     }
   }
 }
@@ -679,8 +777,9 @@ module.exports = {
   handleClearWallpaper,
   handleInstallChinese,
   handleManageLocale,
-  handleFullPatch,
-  handleFullPatchTw,
+  handleFullSetupWizard,
+  handleFullPatch: handleFullSetupWizard,
+  handleFullPatchTw: handleFullSetupWizard,
   handleRestore,
   handleToggleWidget,
 };
