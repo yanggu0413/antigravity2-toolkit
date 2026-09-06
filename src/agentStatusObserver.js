@@ -418,22 +418,53 @@ function getObserverScript() {
       var readCount = Math.max(Object.keys(seenReads).length, activities.filter(function(a) { return a.type === 'read'; }).length);
       var editCount = Math.max(filesChangedCount, Object.keys(seenEdits).length);
 
-      // 4. Detect thinking / working state with live second timer
-      var isWorking = false;
-      var stopButtons = document.querySelectorAll('button[aria-label*="Cancel"], button[aria-label*="取消"], button[aria-label*="Stop"], button[aria-label*="停止"], button[aria-label*="Stop execution"]');
-      if (stopButtons.length > 0) {
-        isWorking = true;
-      }
-
-      var workingTextNode = false;
-      var allNodes = document.querySelectorAll('*');
-      for (var an = 0; an < allNodes.length; an++) {
-        if ((allNodes[an].innerText || '').trim() === 'Working.') {
-          workingTextNode = true;
+      // 4. Detect thinking / running / working state with live second timer
+      var hasStopButton = false;
+      var stopButtons = document.querySelectorAll(
+        'button[aria-label*="Stop" i], button[aria-label*="Cancel" i], button[aria-label*="停止"], button[aria-label*="取消"], ' +
+        'button[title*="Stop" i], button[title*="Cancel" i], button[title*="停止"], button[title*="取消"], ' +
+        'button:has(svg rect), button:has(rect)'
+      );
+      for (var sbi = 0; sbi < stopButtons.length; sbi++) {
+        var sRect = stopButtons[sbi].getBoundingClientRect();
+        if (sRect.width > 0 && sRect.height > 0) {
+          hasStopButton = true;
           break;
         }
       }
-      var isSpinnerActive = document.querySelectorAll('svg[class*="animate"], [class*="spinner"]').length > 0;
+
+      var hasSpinner = false;
+      var spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"], [class*="spinner"]');
+      for (var spi = 0; spi < spinners.length; spi++) {
+        var spRect = spinners[spi].getBoundingClientRect();
+        if (spRect.width > 0 && spRect.height > 0) {
+          hasSpinner = true;
+          break;
+        }
+      }
+
+      var hasThinking = false;
+      var hasWorkingText = false;
+      var allCheckNodes = document.querySelectorAll('button, div[class*="step"], span');
+      for (var ci = 0; ci < allCheckNodes.length; ci++) {
+        var cTxt = (allCheckNodes[ci].innerText || '').trim();
+        if (/^(Thinking|思考中|處理中)\.{0,3}$/i.test(cTxt)) {
+          hasThinking = true;
+          break;
+        }
+        if (/^(Thought for|Worked for)/i.test(cTxt)) {
+          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"], [class*="spinner"]')) {
+            hasThinking = true;
+            break;
+          }
+        }
+        if (cTxt === 'Working.' || cTxt === 'Generating...' || cTxt === '正在生成...' || cTxt === '執行中...') {
+          hasWorkingText = true;
+          break;
+        }
+      }
+
+      var isWorking = hasStopButton || hasSpinner || hasThinking || hasWorkingText;
 
       if (isWorking) {
         if (!window.__ag_work_start_time) {
@@ -477,12 +508,12 @@ function getObserverScript() {
         status = 'ask';
         statusText = '等待使用者決策';
       } else if (isWorking) {
-        if (workingTextNode || isSpinnerActive) {
-          status = 'running';
-          statusText = '執行中 (' + elapsedSec + 's)...';
-        } else {
+        if (hasThinking) {
           status = 'thinking';
           statusText = '思考中 (' + elapsedSec + 's)...';
+        } else {
+          status = 'running';
+          statusText = '執行中 (' + elapsedSec + 's)...';
         }
       } else if (responseInfo) {
         status = 'completed';
@@ -641,26 +672,81 @@ function getScraperExpression() {
 
       const uniqueSteps = Array.from(new Set(stepTexts));
 
-      // 3. Detect thinking / working state
-      let isWorking = false;
-      let thinkingText = '';
-      const stopButtons = document.querySelectorAll('button');
-      for (let sb = 0; sb < stopButtons.length; sb++) {
-        const st = (stopButtons[sb].innerText || '').trim();
-        if (/^(Stop|Cancel|停止|中斷)$/i.test(st)) {
-          isWorking = true;
+      // 3. Detect thinking / running / working state with live second timer
+      let hasStopButton = false;
+      const stopButtons = document.querySelectorAll(
+        'button[aria-label*="Stop" i], button[aria-label*="Cancel" i], button[aria-label*="停止"], button[aria-label*="取消"], ' +
+        'button[title*="Stop" i], button[title*="Cancel" i], button[title*="停止"], button[title*="取消"], ' +
+        'button:has(svg rect), button:has(rect)'
+      );
+      for (let sbi = 0; sbi < stopButtons.length; sbi++) {
+        const sRect = stopButtons[sbi].getBoundingClientRect();
+        if (sRect.width > 0 && sRect.height > 0) {
+          hasStopButton = true;
           break;
         }
       }
 
-      const timerButtons = document.querySelectorAll('button');
-      for (let tb = 0; tb < timerButtons.length; tb++) {
-        const tt = (timerButtons[tb].innerText || '').trim();
-        if (/^(Thought for|Worked for|Thinking|思考中|運作中)/i.test(tt)) {
-          thinkingText = tt;
-          if (timerButtons[tb].querySelector('svg[class*="animate"], [class*="spinner"]')) {
-            isWorking = true;
+      let hasSpinner = false;
+      const spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"], [class*="spinner"]');
+      for (let spi = 0; spi < spinners.length; spi++) {
+        const spRect = spinners[spi].getBoundingClientRect();
+        if (spRect.width > 0 && spRect.height > 0) {
+          hasSpinner = true;
+          break;
+        }
+      }
+
+      let hasThinking = false;
+      let hasWorkingText = false;
+      const allCheckNodes = document.querySelectorAll('button, div[class*="step"], span');
+      for (let ci = 0; ci < allCheckNodes.length; ci++) {
+        const cTxt = (allCheckNodes[ci].innerText || '').trim();
+        if (/^(Thinking|思考中|處理中)\.{0,3}$/i.test(cTxt)) {
+          hasThinking = true;
+          break;
+        }
+        if (/^(Thought for|Worked for)/i.test(cTxt)) {
+          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"], [class*="spinner"]')) {
+            hasThinking = true;
+            break;
           }
+        }
+        if (cTxt === 'Working.' || cTxt === 'Generating...' || cTxt === '正在生成...' || cTxt === '執行中...') {
+          hasWorkingText = true;
+          break;
+        }
+      }
+
+      const isWorking = hasStopButton || hasSpinner || hasThinking || hasWorkingText;
+
+      if (isWorking) {
+        if (!window.__ag_work_start_time) {
+          window.__ag_work_start_time = Date.now();
+        }
+      } else {
+        window.__ag_work_start_time = null;
+      }
+      const elapsedSec = window.__ag_work_start_time ? Math.max(1, Math.floor((Date.now() - window.__ag_work_start_time) / 1000)) : 0;
+
+      // Scrape latest AI Agent response text
+      let responseInfo = null;
+      const aiResponseEls = document.querySelectorAll('div.leading-relaxed.select-text');
+      if (aiResponseEls.length > 0) {
+        const lastAiEl = aiResponseEls[aiResponseEls.length - 1];
+        const rawAiText = (lastAiEl.innerText || '').trim();
+        if (rawAiText) {
+          const lines = rawAiText.split('\\n').map(l => l.trim()).filter(Boolean);
+          let snippet = '';
+          for (let li = 0; li < lines.length; li++) {
+            if (lines[li].indexOf('#') !== 0 && lines[li].indexOf('---') !== 0) {
+              snippet = lines[li];
+              break;
+            }
+          }
+          if (!snippet && lines.length > 0) snippet = lines[0];
+          if (snippet.length > 150) snippet = snippet.slice(0, 147) + '...';
+          responseInfo = { snippet: snippet, full: rawAiText.slice(0, 1200) };
         }
       }
 
@@ -670,8 +756,16 @@ function getScraperExpression() {
         status = 'ask';
         statusText = '等待使用者決策';
       } else if (isWorking) {
-        status = 'running';
-        statusText = thinkingText || 'Agent 運作中...';
+        if (hasThinking) {
+          status = 'thinking';
+          statusText = '思考中 (' + elapsedSec + 's)...';
+        } else {
+          status = 'running';
+          statusText = '執行中 (' + elapsedSec + 's)...';
+        }
+      } else if (responseInfo) {
+        status = 'completed';
+        statusText = '任務已完成';
       }
 
       // Parse activity metrics
@@ -734,7 +828,8 @@ function getScraperExpression() {
         delLines,
         cmdCount,
         ask: askInfo,
-        activities: activities.slice(-100)
+        activities: activities.slice(-100),
+        response: responseInfo
       };
     })()
   `;
