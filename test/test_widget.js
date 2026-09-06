@@ -40,22 +40,22 @@ async function runWidgetTests() {
     // 2. Default Positioning Calculation
     const fullHdArea = { x: 0, y: 0, width: 1920, height: 1080 };
     const posExpanded = floatingWidgetManager.calculateDefaultPosition(fullHdArea, false);
-    assert.strictEqual(posExpanded.width, 320);
-    assert.strictEqual(posExpanded.height, 240);
-    assert.strictEqual(posExpanded.x, 1920 - 320 - 20); // 1580
-    assert.strictEqual(posExpanded.y, 1080 - 240 - 20); // 820
+    assert.strictEqual(posExpanded.width, 400);
+    assert.strictEqual(posExpanded.height, 300);
+    assert.strictEqual(posExpanded.x, 1920 - 400 - 20); // 1500
+    assert.strictEqual(posExpanded.y, 1080 - 300 - 20); // 760
 
     const posCollapsed = floatingWidgetManager.calculateDefaultPosition(fullHdArea, true);
-    assert.strictEqual(posCollapsed.width, 320);
-    assert.strictEqual(posCollapsed.height, 38);
-    assert.strictEqual(posCollapsed.x, 1580);
-    assert.strictEqual(posCollapsed.y, 1080 - 38 - 20); // 1022
+    assert.strictEqual(posCollapsed.width, 400);
+    assert.strictEqual(posCollapsed.height, 42);
+    assert.strictEqual(posCollapsed.x, 1500);
+    assert.strictEqual(posCollapsed.y, 1080 - 42 - 20); // 1018
 
     // Multi-monitor offset
     const secondaryArea = { x: 1920, y: 100, width: 2560, height: 1440 };
     const posSecondary = floatingWidgetManager.calculateDefaultPosition(secondaryArea, false);
-    assert.strictEqual(posSecondary.x, 1920 + 2560 - 320 - 20);
-    assert.strictEqual(posSecondary.y, 100 + 1440 - 240 - 20);
+    assert.strictEqual(posSecondary.x, 1920 + 2560 - 400 - 20);
+    assert.strictEqual(posSecondary.y, 100 + 1440 - 300 - 20);
     console.log('  ✔ Default corner positioning and multi-monitor coordinates computed accurately');
 
     // 3. Agent Status & DOM Scraping Parsers
@@ -217,6 +217,7 @@ async function runWidgetTests() {
     assert(win, 'floatingWidgetManager.init should return created window');
     assert.strictEqual(win.options.transparent, true, 'Window must be transparent');
     assert.strictEqual(win.options.frame, false, 'Window must be frameless');
+    assert.strictEqual(win.options.resizable, true, 'Window must be resizable');
     assert.strictEqual(win.options.alwaysOnTop, true, 'Window must be always on top');
     assert.strictEqual(win.options.maximizable, false, 'Window must not be maximizable');
     assert.strictEqual(win.options.minimizable, false, 'Window must not be minimizable');
@@ -233,12 +234,12 @@ async function runWidgetTests() {
     // Test Collapse IPC
     assert(ipcHandlers['ag-widget-toggle-collapse'], 'Must register ag-widget-toggle-collapse handler');
     ipcHandlers['ag-widget-toggle-collapse']({}, true);
-    assert.strictEqual(win.getBounds().height, 38, 'Height must collapse to 38px');
+    assert.strictEqual(win.getBounds().height, 42, 'Height must collapse to 42px');
     assert.strictEqual(configManager.getFloatingWidgetConfig().collapsed, true);
     assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
     ipcHandlers['ag-widget-toggle-collapse']({}, false);
-    assert.strictEqual(win.getBounds().height, 240, 'Height must expand to 240px');
+    assert.strictEqual(win.getBounds().height, 300, 'Height must expand to 300px');
     assert.strictEqual(configManager.getFloatingWidgetConfig().collapsed, false);
     assert.strictEqual(win.alwaysOnTop.level, 'screen-saver');
 
@@ -273,6 +274,7 @@ async function runWidgetTests() {
     const widgetHtmlContent = fs.readFileSync(path.join(__dirname, '..', 'src', 'widget', 'widget.html'), 'utf8');
     assert(!emojiRegex.test(widgetHtmlContent), 'widget.html MUST NOT contain any emoji characters');
     assert(widgetHtmlContent.includes('<svg'), 'widget.html must use inline SVG vector icons');
+    assert(widgetHtmlContent.includes('id="btnZoom"'), 'widget.html must include btnZoom control');
 
     const widgetManagerContent = fs.readFileSync(path.join(__dirname, '..', 'src', 'floatingWidgetManager.js'), 'utf8');
     assert(!emojiRegex.test(widgetManagerContent), 'floatingWidgetManager.js MUST NOT contain any emoji characters');

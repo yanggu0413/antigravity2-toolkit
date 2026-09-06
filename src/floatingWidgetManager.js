@@ -109,12 +109,13 @@ function resolveWidgetHtmlPath() {
  * Calculates default position in bottom-right corner of screen workArea.
  * @param {{ x: number, y: number, width: number, height: number }} workArea 
  * @param {boolean} isCollapsed 
+ * @param {{ width?: number, height?: number }} customSize 
  * @returns {{ x: number, y: number, width: number, height: number }}
  */
-function calculateDefaultPosition(workArea, isCollapsed = false) {
+function calculateDefaultPosition(workArea, isCollapsed = false, customSize = null) {
   const area = workArea || { x: 0, y: 0, width: 1920, height: 1080 };
-  const width = 320;
-  const height = isCollapsed ? 38 : 240;
+  const width = (customSize && typeof customSize.width === 'number') ? customSize.width : 400;
+  const height = isCollapsed ? 42 : ((customSize && typeof customSize.height === 'number') ? customSize.height : 300);
   const margin = 20;
 
   const x = Math.round(area.x + area.width - width - margin);
@@ -220,7 +221,8 @@ function init(mainWin, options = {}) {
     } catch (_) {}
   }
 
-  const defaultPos = calculateDefaultPosition(primaryWorkArea, isCollapsedState);
+  const customSize = config.size || null;
+  const defaultPos = calculateDefaultPosition(primaryWorkArea, isCollapsedState, customSize);
   let x = defaultPos.x;
   let y = defaultPos.y;
 
@@ -243,12 +245,14 @@ function init(mainWin, options = {}) {
     height,
     x,
     y,
+    minWidth: 320,
+    minHeight: 42,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
     alwaysOnTop: config.alwaysOnTop !== false,
     skipTaskbar: true,
-    resizable: false,
+    resizable: true,
     maximizable: false,
     minimizable: false,
     fullscreenable: false,
@@ -325,8 +329,25 @@ function init(mainWin, options = {}) {
     }, 500);
   });
 
+  let resizeDebounceTimer = null;
+  widgetWindow.on('resize', () => {
+    if (isCollapsedState) return;
+    clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(() => {
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      try {
+        const bounds = widgetWindow.getBounds();
+        updateFloatingWidgetConfig({
+          size: { width: bounds.width, height: bounds.height },
+        });
+        enforceAlwaysOnTop();
+      } catch (_) {}
+    }, 500);
+  });
+
   widgetWindow.on('closed', () => {
     clearTimeout(moveDebounceTimer);
+    clearTimeout(resizeDebounceTimer);
     widgetWindow = null;
   });
 
@@ -349,7 +370,9 @@ function setupIpcHandlers(electron) {
     isCollapsedState = Boolean(isCollapsed);
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       const bounds = widgetWindow.getBounds();
-      const targetHeight = isCollapsedState ? 38 : 240;
+      const config = getFloatingWidgetConfig();
+      const normalHeight = (config.size && typeof config.size.height === 'number') ? config.size.height : 300;
+      const targetHeight = isCollapsedState ? 42 : normalHeight;
       widgetWindow.setBounds({
         x: bounds.x,
         y: isCollapsedState ? (bounds.y + (bounds.height - targetHeight)) : (bounds.y - (targetHeight - bounds.height)),
