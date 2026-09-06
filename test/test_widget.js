@@ -118,13 +118,27 @@ async function runWidgetTests() {
 
     const statusIdle = agentStatusObserver.deduceAgentStatus({ hasAsk: false, isWorking: false });
     assert.strictEqual(statusIdle.status, 'idle');
+    assert.strictEqual(statusIdle.statusText, '待命中');
+
+    const statusCompleted = agentStatusObserver.deduceAgentStatus({
+      hasAsk: false,
+      isWorking: false,
+      hasResponse: true,
+    });
+    assert.strictEqual(statusCompleted.status, 'completed');
+    assert.strictEqual(statusCompleted.statusText, '任務已完成');
 
     // Verify settings modal exclusion in observer code
     const observerScript = agentStatusObserver.getObserverScript();
     assert.ok(observerScript.includes('設定|Settings|Preferences'), 'Observer script must exclude settings modal');
+    assert.ok(!observerScript.includes('button:has(svg rect)'), 'Observer script must not match all SVG rect buttons');
+    assert.ok(!observerScript.includes('button:has(rect)'), 'Observer script must not match all rect buttons');
+
     const scraperExpr = agentStatusObserver.getScraperExpression();
     assert.ok(scraperExpr.includes('設定|Settings|Preferences'), 'Scraper expression must exclude settings modal');
-    console.log('  ✔ Agent step parser, diff metrics (+add -del), and status deduction validated');
+    assert.ok(!scraperExpr.includes('button:has(svg rect)'), 'Scraper expression must not match all SVG rect buttons');
+    assert.ok(!scraperExpr.includes('button:has(rect)'), 'Scraper expression must not match all rect buttons');
+    console.log('  ✔ Agent step parser, diff metrics (+add -del), completed state, and accurate stop detection validated');
 
     // 4. Mock Electron Window Lifecycle & IPC
     const ipcHandlers = {};

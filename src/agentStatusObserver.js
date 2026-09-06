@@ -191,7 +191,7 @@ function extractMetrics(stepTexts) {
  * @param {object} params
  * @returns {{ status: string, statusText: string }}
  */
-function deduceAgentStatus({ hasAsk, isWorking, thinkingText, lastActionText }) {
+function deduceAgentStatus({ hasAsk, isWorking, thinkingText, lastActionText, hasResponse }) {
   if (hasAsk) {
     return { status: 'ask', statusText: '等待使用者決策' };
   }
@@ -203,6 +203,9 @@ function deduceAgentStatus({ hasAsk, isWorking, thinkingText, lastActionText }) 
       return { status: 'running', statusText: `執行: ${lastActionText}` };
     }
     return { status: 'running', statusText: 'Agent 運作中...' };
+  }
+  if (hasResponse) {
+    return { status: 'completed', statusText: '任務已完成' };
   }
   return { status: 'idle', statusText: '待命中' };
 }
@@ -420,26 +423,60 @@ function getObserverScript() {
 
       // 4. Detect thinking / running / working state with live second timer
       var hasStopButton = false;
-      var stopButtons = document.querySelectorAll(
-        'button[aria-label*="Stop" i], button[aria-label*="Cancel" i], button[aria-label*="停止"], button[aria-label*="取消"], ' +
-        'button[title*="Stop" i], button[title*="Cancel" i], button[title*="停止"], button[title*="取消"], ' +
-        'button:has(svg rect), button:has(rect)'
+      var candidateStopButtons = document.querySelectorAll(
+        'button[aria-label*="Stop" i], button[title*="Stop" i], ' +
+        'button[aria-label*="停止"], button[title*="停止"], ' +
+        'button[aria-label*="中斷"], button[title*="中斷"]'
       );
-      for (var sbi = 0; sbi < stopButtons.length; sbi++) {
-        var sRect = stopButtons[sbi].getBoundingClientRect();
+      for (var sbi = 0; sbi < candidateStopButtons.length; sbi++) {
+        var sBtn = candidateStopButtons[sbi];
+        var sRect = sBtn.getBoundingClientRect();
         if (sRect.width > 0 && sRect.height > 0) {
-          hasStopButton = true;
-          break;
+          var sLabel = (sBtn.getAttribute('aria-label') || sBtn.getAttribute('title') || sBtn.innerText || '').trim();
+          if (/^(Stop(\s+(generating|response|agent|execution|run))?|停止(生成|回應|執行)?|中斷)$/i.test(sLabel) ||
+              /^(Stop generating|停止生成|停止回應)/i.test(sLabel)) {
+            hasStopButton = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasStopButton) {
+        var textareas = document.querySelectorAll('textarea, [contenteditable="true"]');
+        for (var tai = 0; tai < textareas.length; tai++) {
+          var inputParent = textareas[tai].closest('form, [class*="input"], [class*="prompt"], [class*="chat"]');
+          if (inputParent) {
+            var inputBtns = inputParent.querySelectorAll('button');
+            for (var ibi = 0; ibi < inputBtns.length; ibi++) {
+              var ib = inputBtns[ibi];
+              var ibRect = ib.getBoundingClientRect();
+              if (ibRect.width > 0 && ibRect.height > 0) {
+                var ibLabel = (ib.getAttribute('aria-label') || ib.getAttribute('title') || ib.innerText || '').trim();
+                if (/Stop|停止|中斷/i.test(ibLabel)) {
+                  hasStopButton = true;
+                  break;
+                }
+                if (ib.querySelector('svg rect, rect') && !ib.querySelector('path[d*="M"]') && !/send|submit|attach|voice|語音|發送|送出/i.test(ibLabel)) {
+                  hasStopButton = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (hasStopButton) break;
         }
       }
 
       var hasSpinner = false;
-      var spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"], [class*="spinner"]');
+      var spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"]');
       for (var spi = 0; spi < spinners.length; spi++) {
         var spRect = spinners[spi].getBoundingClientRect();
         if (spRect.width > 0 && spRect.height > 0) {
-          hasSpinner = true;
-          break;
+          var compStyle = window.getComputedStyle ? window.getComputedStyle(spinners[spi]) : null;
+          if (!compStyle || (compStyle.display !== 'none' && compStyle.visibility !== 'hidden' && compStyle.opacity !== '0')) {
+            hasSpinner = true;
+            break;
+          }
         }
       }
 
@@ -449,22 +486,26 @@ function getObserverScript() {
       for (var ci = 0; ci < allCheckNodes.length; ci++) {
         var cTxt = (allCheckNodes[ci].innerText || '').trim();
         if (/^(Thinking|思考中|處理中)\.{0,3}$/i.test(cTxt)) {
-          hasThinking = true;
-          break;
+          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
+            hasThinking = true;
+            break;
+          }
         }
         if (/^(Thought for|Worked for)/i.test(cTxt)) {
-          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"], [class*="spinner"]')) {
+          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
             hasThinking = true;
             break;
           }
         }
         if (cTxt === 'Working.' || cTxt === 'Generating...' || cTxt === '正在生成...' || cTxt === '執行中...') {
-          hasWorkingText = true;
-          break;
+          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
+            hasWorkingText = true;
+            break;
+          }
         }
       }
 
-      var isWorking = hasStopButton || hasSpinner || hasThinking || hasWorkingText;
+      var isWorking = hasStopButton || hasSpinner;
 
       if (isWorking) {
         if (!window.__ag_work_start_time) {
@@ -674,26 +715,60 @@ function getScraperExpression() {
 
       // 3. Detect thinking / running / working state with live second timer
       let hasStopButton = false;
-      const stopButtons = document.querySelectorAll(
-        'button[aria-label*="Stop" i], button[aria-label*="Cancel" i], button[aria-label*="停止"], button[aria-label*="取消"], ' +
-        'button[title*="Stop" i], button[title*="Cancel" i], button[title*="停止"], button[title*="取消"], ' +
-        'button:has(svg rect), button:has(rect)'
+      const candidateStopButtons = document.querySelectorAll(
+        'button[aria-label*="Stop" i], button[title*="Stop" i], ' +
+        'button[aria-label*="停止"], button[title*="停止"], ' +
+        'button[aria-label*="中斷"], button[title*="中斷"]'
       );
-      for (let sbi = 0; sbi < stopButtons.length; sbi++) {
-        const sRect = stopButtons[sbi].getBoundingClientRect();
+      for (let sbi = 0; sbi < candidateStopButtons.length; sbi++) {
+        const sBtn = candidateStopButtons[sbi];
+        const sRect = sBtn.getBoundingClientRect();
         if (sRect.width > 0 && sRect.height > 0) {
-          hasStopButton = true;
-          break;
+          const sLabel = (sBtn.getAttribute('aria-label') || sBtn.getAttribute('title') || sBtn.innerText || '').trim();
+          if (/^(Stop(\s+(generating|response|agent|execution|run))?|停止(生成|回應|執行)?|中斷)$/i.test(sLabel) ||
+              /^(Stop generating|停止生成|停止回應)/i.test(sLabel)) {
+            hasStopButton = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasStopButton) {
+        const textareas = document.querySelectorAll('textarea, [contenteditable="true"]');
+        for (let tai = 0; tai < textareas.length; tai++) {
+          const inputParent = textareas[tai].closest('form, [class*="input"], [class*="prompt"], [class*="chat"]');
+          if (inputParent) {
+            const inputBtns = inputParent.querySelectorAll('button');
+            for (let ibi = 0; ibi < inputBtns.length; ibi++) {
+              const ib = inputBtns[ibi];
+              const ibRect = ib.getBoundingClientRect();
+              if (ibRect.width > 0 && ibRect.height > 0) {
+                const ibLabel = (ib.getAttribute('aria-label') || ib.getAttribute('title') || ib.innerText || '').trim();
+                if (/Stop|停止|中斷/i.test(ibLabel)) {
+                  hasStopButton = true;
+                  break;
+                }
+                if (ib.querySelector('svg rect, rect') && !ib.querySelector('path[d*="M"]') && !/send|submit|attach|voice|語音|發送|送出/i.test(ibLabel)) {
+                  hasStopButton = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (hasStopButton) break;
         }
       }
 
       let hasSpinner = false;
-      const spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"], [class*="spinner"]');
+      const spinners = document.querySelectorAll('.animate-spin, svg.animate-spin, [class*="animate-spin"]');
       for (let spi = 0; spi < spinners.length; spi++) {
         const spRect = spinners[spi].getBoundingClientRect();
         if (spRect.width > 0 && spRect.height > 0) {
-          hasSpinner = true;
-          break;
+          const compStyle = window.getComputedStyle ? window.getComputedStyle(spinners[spi]) : null;
+          if (!compStyle || (compStyle.display !== 'none' && compStyle.visibility !== 'hidden' && compStyle.opacity !== '0')) {
+            hasSpinner = true;
+            break;
+          }
         }
       }
 
@@ -703,22 +778,26 @@ function getScraperExpression() {
       for (let ci = 0; ci < allCheckNodes.length; ci++) {
         const cTxt = (allCheckNodes[ci].innerText || '').trim();
         if (/^(Thinking|思考中|處理中)\.{0,3}$/i.test(cTxt)) {
-          hasThinking = true;
-          break;
+          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
+            hasThinking = true;
+            break;
+          }
         }
         if (/^(Thought for|Worked for)/i.test(cTxt)) {
-          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"], [class*="spinner"]')) {
+          if (allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
             hasThinking = true;
             break;
           }
         }
         if (cTxt === 'Working.' || cTxt === 'Generating...' || cTxt === '正在生成...' || cTxt === '執行中...') {
-          hasWorkingText = true;
-          break;
+          if (hasSpinner || hasStopButton || allCheckNodes[ci].querySelector('.animate-spin, [class*="animate"]')) {
+            hasWorkingText = true;
+            break;
+          }
         }
       }
 
-      const isWorking = hasStopButton || hasSpinner || hasThinking || hasWorkingText;
+      const isWorking = hasStopButton || hasSpinner;
 
       if (isWorking) {
         if (!window.__ag_work_start_time) {
